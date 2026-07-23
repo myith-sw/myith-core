@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: myith-core
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/myith}
+    username: ${DB_USERNAME:myith}
+    password: ${DB_PASSWORD:myith}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: public
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET:CHANGE_ME_IN_PRODUCTION_THIS_IS_DEV_ONLY_KEY_32BYTES}
+  access-token-expiry: ${JWT_ACCESS_EXPIRY:1800000}      # 30분
+  refresh-token-expiry: ${JWT_REFRESH_EXPIRY:604800000}   # 7일
+
+# AWS S3
+aws:
+  s3:
+    bucket: ${S3_BUCKET:myith-uploads}
+    region: ${S3_REGION:ap-northeast-2}
+    presign-expiry: ${S3_PRESIGN_EXPIRY:300}
+
+# 정책값
+policy:
+  growth-stage:
+    boundaries: [20, 50, 80]
+    names: ["시작", "성장", "숙련", "완성"]
+  heartbeat:
+    interval-seconds: ${HEARTBEAT_INTERVAL:60}
+  activity:
+    throttle-minutes: ${ACTIVITY_THROTTLE:5}
+  inactivity:
+    threshold-hours: ${INACTIVITY_THRESHOLD:48}
+  nudge:
+    cooldown-hours: ${NUDGE_COOLDOWN:24}
+  cache:
+    dashboard-ttl-seconds: ${CACHE_DASHBOARD_TTL:600}
+    job-profile-ttl-seconds: ${CACHE_JOB_PROFILE_TTL:3600}
+    master-data-ttl-seconds: ${CACHE_MASTER_TTL:86400}
+  optimistic-lock:
+    max-retries: ${LOCK_MAX_RETRIES:3}
+  analysis:
+    timeout-seconds: ${ANALYSIS_TIMEOUT:120}
+  upload:
+    max-size-bytes: ${UPLOAD_MAX_SIZE:10485760}
+    allowed-extensions: ["pdf", "zip", "tar.gz"]
+
+# Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
