@@ -4,6 +4,7 @@ import com.myith.core.application.auth.AuthService;
 import com.myith.core.application.auth.GoogleTokenVerifier;
 import com.myith.core.application.auth.UserService;
 import com.myith.core.application.roadmap.JobQueryService;
+import com.myith.core.application.roadmap.RoadmapCreateService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -50,6 +51,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUserNotFound(UserService.UserNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(RoadmapCreateService.DuplicateSpeciesException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateSpecies(RoadmapCreateService.DuplicateSpeciesException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("DUPLICATE_SPECIES", e.getMessage()));
     }
 
     @ExceptionHandler(JobQueryService.JobProfileNotFoundException.class)
