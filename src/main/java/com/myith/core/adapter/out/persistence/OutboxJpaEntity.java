@@ -69,4 +69,17 @@ public class OutboxJpaEntity {
     public int getRetryCount() { return retryCount; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getPublishedAt() { return publishedAt; }
+
+    public void markPublished() {
+        this.status = "PUBLISHED";
+        this.publishedAt = Instant.now();
+    }
+
+    public void markFailed() {
+        this.status = "FAILED";
+    }
+
+    public void incrementRetry() {
+        this.retryCount++;
+    }
 }
