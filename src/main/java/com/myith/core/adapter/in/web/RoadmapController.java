@@ -1,5 +1,6 @@
 package com.myith.core.adapter.in.web;
 
+import com.myith.core.application.dashboard.DashboardQueryService;
 import com.myith.core.application.quest.QuestManageService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapCreateService.*;
@@ -26,13 +27,16 @@ public class RoadmapController {
     private final RoadmapCreateService roadmapCreateService;
     private final RoadmapQueryService roadmapQueryService;
     private final QuestManageService questManageService;
+    private final DashboardQueryService dashboardQueryService;
 
     public RoadmapController(RoadmapCreateService roadmapCreateService,
                              RoadmapQueryService roadmapQueryService,
-                             QuestManageService questManageService) {
+                             QuestManageService questManageService,
+                             DashboardQueryService dashboardQueryService) {
         this.roadmapCreateService = roadmapCreateService;
         this.roadmapQueryService = roadmapQueryService;
         this.questManageService = questManageService;
+        this.dashboardQueryService = dashboardQueryService;
     }
 
     @PostMapping
@@ -92,6 +96,13 @@ public class RoadmapController {
             @PathVariable Long questId) {
         questManageService.deleteQuest(userId, roadmapId, questId);
         return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    @GetMapping("/{roadmapId}/dashboard")
+    public ResponseEntity<ApiResponse<DashboardQueryService.DashboardDto>> getDashboard(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long roadmapId) {
+        return ResponseEntity.ok(ApiResponse.success(dashboardQueryService.getDashboard(userId, roadmapId)));
     }
 
     // ===== Request DTOs =====
