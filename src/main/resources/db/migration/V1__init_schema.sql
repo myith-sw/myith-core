@@ -5,7 +5,7 @@
 CREATE TABLE users (
     id                  BIGSERIAL PRIMARY KEY,
     email               VARCHAR(255) NOT NULL UNIQUE,
-    password_hash       VARCHAR(255) NOT NULL,
+    google_id           VARCHAR(255) UNIQUE,
     nickname            VARCHAR(50)  NOT NULL,
     profile_image_url   VARCHAR(512),
     last_heartbeat_at   TIMESTAMPTZ,
@@ -23,9 +23,11 @@ CREATE TABLE roadmap (
     profile_version   INT          NOT NULL,
     status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
     generation_state  VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
+    retry_count       INT          NOT NULL DEFAULT 0,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    archived_at       TIMESTAMPTZ
+    archived_at       TIMESTAMPTZ,
+    deleted_at        TIMESTAMPTZ
 );
 
 CREATE INDEX idx_roadmap_user_id ON roadmap(user_id);
@@ -38,7 +40,8 @@ CREATE TABLE character (
     species     VARCHAR(50)  NOT NULL,
     nickname    VARCHAR(50),
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at  TIMESTAMPTZ
 );
 
 CREATE INDEX idx_character_user_id ON character(user_id);
@@ -53,12 +56,13 @@ CREATE TABLE quest (
     title               VARCHAR(255) NOT NULL,
     completion_criteria TEXT,
     ncs_unit_code       VARCHAR(50),
-    source              VARCHAR(20)  NOT NULL DEFAULT 'GENERATED',
+    source              VARCHAR(20)  NOT NULL DEFAULT 'SKILL',
     status              VARCHAR(20)  NOT NULL DEFAULT 'LOCKED',
     completed_at        TIMESTAMPTZ,
     version             BIGINT       NOT NULL DEFAULT 0,
     created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at          TIMESTAMPTZ
 );
 
 CREATE INDEX idx_quest_roadmap_id ON quest(roadmap_id);
@@ -82,9 +86,10 @@ CREATE TABLE star_record (
     action        TEXT,
     result        TEXT,
     completeness  VARCHAR(20),
-    tags          VARCHAR[]    ,
+    tags          VARCHAR[],
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMPTZ
 );
 
 CREATE INDEX idx_star_record_user ON star_record(user_id);
@@ -135,15 +140,16 @@ CREATE TABLE job (
 );
 
 CREATE TABLE job_profile (
-    job_code       VARCHAR(50) NOT NULL,
-    version        INT         NOT NULL,
-    axes           JSONB       NOT NULL,
-    skills         JSONB       NOT NULL,
-    levels         JSONB       NOT NULL,
-    prerequisites  JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    questions      JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    quest_templates JSONB      NOT NULL DEFAULT '[]'::jsonb,
-    built_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    job_code        VARCHAR(50) NOT NULL,
+    version         INT         NOT NULL,
+    axes            JSONB       NOT NULL,
+    skills          JSONB       NOT NULL,
+    levels          JSONB       NOT NULL,
+    prerequisites   JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    questions       JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    quest_templates JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    activity_quests JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    built_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (job_code, version)
 );
 
@@ -167,7 +173,9 @@ CREATE TABLE ncs_unit (
 CREATE TABLE ncs_certification (
     id             BIGSERIAL    PRIMARY KEY,
     ncs_unit_code  VARCHAR(50)  NOT NULL REFERENCES ncs_unit(code),
-    cert_name      VARCHAR(200) NOT NULL
+    cert_code      VARCHAR(50),
+    cert_name      VARCHAR(200) NOT NULL,
+    unit_type      VARCHAR(50)
 );
 
 CREATE INDEX idx_ncs_cert_unit ON ncs_certification(ncs_unit_code);
