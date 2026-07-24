@@ -42,9 +42,13 @@ server:
 
 # JWT
 jwt:
-  secret: ${JWT_SECRET:CHANGE_ME_IN_PRODUCTION_THIS_IS_DEV_ONLY_KEY_32BYTES}
+  secret: ${JWT_SECRET:CHANGE_ME_IN_PRODUCTION_THIS_IS_DEV_ONLY_KEY_32BYTES_1234}
   access-token-expiry: ${JWT_ACCESS_EXPIRY:1800000}      # 30분
   refresh-token-expiry: ${JWT_REFRESH_EXPIRY:604800000}   # 7일
+
+# Google OAuth
+google:
+  client-id: ${GOOGLE_CLIENT_ID:}
 
 # AWS S3
 aws:
