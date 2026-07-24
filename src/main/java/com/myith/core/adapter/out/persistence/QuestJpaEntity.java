@@ -92,4 +92,8 @@ public class QuestJpaEntity {
                 completedAt, version, createdAt, updatedAt
         );
     }
+
+    public void setDeletedAt(java.time.Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 }

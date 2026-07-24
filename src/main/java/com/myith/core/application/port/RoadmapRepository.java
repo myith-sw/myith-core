@@ -9,4 +9,5 @@ public interface RoadmapRepository {
     Roadmap save(Roadmap roadmap);
     Optional<Roadmap> findById(Long id);
     List<Roadmap> findActiveByUserIdAndJobCode(Long userId, String jobCode);
+    List<Roadmap> findActiveByUserId(Long userId);
 }

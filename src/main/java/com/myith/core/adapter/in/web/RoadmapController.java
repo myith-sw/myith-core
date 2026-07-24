@@ -1,8 +1,11 @@
 package com.myith.core.adapter.in.web;
 
+import com.myith.core.application.quest.QuestManageService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapCreateService.*;
+import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.domain.roadmap.Quest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -21,16 +24,21 @@ import java.util.Map;
 public class RoadmapController {
 
     private final RoadmapCreateService roadmapCreateService;
+    private final RoadmapQueryService roadmapQueryService;
+    private final QuestManageService questManageService;
 
-    public RoadmapController(RoadmapCreateService roadmapCreateService) {
+    public RoadmapController(RoadmapCreateService roadmapCreateService,
+                             RoadmapQueryService roadmapQueryService,
+                             QuestManageService questManageService) {
         this.roadmapCreateService = roadmapCreateService;
+        this.roadmapQueryService = roadmapQueryService;
+        this.questManageService = questManageService;
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<Map<String, Long>>> createRoadmap(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody CreateRoadmapRequest request) {
-
         CreateCommand cmd = new CreateCommand(
                 request.jobCode(), request.profileVersion(),
                 request.species(), request.nickname(),
@@ -43,26 +51,61 @@ public class RoadmapController {
                         : null,
                 request.repoUrl(), request.fileKey()
         );
-
         CreateResult result = roadmapCreateService.create(userId, cmd);
-
         HttpStatus status = result.async() ? HttpStatus.ACCEPTED : HttpStatus.OK;
         return ResponseEntity.status(status)
                 .body(ApiResponse.success(Map.of("roadmapId", result.roadmapId())));
     }
 
+    @GetMapping("/{roadmapId}")
+    public ResponseEntity<ApiResponse<RoadmapQueryService.RoadmapDetailDto>> getDetail(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long roadmapId) {
+        return ResponseEntity.ok(ApiResponse.success(roadmapQueryService.getDetail(userId, roadmapId)));
+    }
+
+    @PatchMapping("/{roadmapId}/quests/order")
+    public ResponseEntity<ApiResponse<Void>> reorderQuest(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long roadmapId,
+            @Valid @RequestBody ReorderRequest request) {
+        questManageService.reorderQuest(userId, roadmapId,
+                request.questId(), request.targetLevel(), request.targetIndex());
+        return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    @PostMapping("/{roadmapId}/quests")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> addQuest(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long roadmapId,
+            @Valid @RequestBody AddQuestRequest request) {
+        Quest quest = questManageService.addCustomQuest(userId, roadmapId,
+                request.title(), request.axisCode(), request.level());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(Map.of("questId", quest.getId())));
+    }
+
+    @DeleteMapping("/{roadmapId}/quests/{questId}")
+    public ResponseEntity<ApiResponse<Void>> deleteQuest(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long roadmapId,
+            @PathVariable Long questId) {
+        questManageService.deleteQuest(userId, roadmapId, questId);
+        return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    // ===== Request DTOs =====
+
     record CreateRoadmapRequest(
-            @NotBlank String jobCode,
-            @NotNull Integer profileVersion,
-            @NotBlank String species,
-            String nickname,
+            @NotBlank String jobCode, @NotNull Integer profileVersion,
+            @NotBlank String species, String nickname,
             @NotEmpty List<AnswerRequest> answers,
-            NarrativeRequest narrative,
-            String repoUrl,
-            String fileKey
-    ) {}
+            NarrativeRequest narrative, String repoUrl, String fileKey) {}
 
     record AnswerRequest(@NotBlank String skillCode, @NotNull BigDecimal mastery) {}
-
     record NarrativeRequest(String experience, String strength, String difficulty) {}
+
+    record ReorderRequest(@NotNull Long questId, @NotNull Integer targetLevel, @NotNull Integer targetIndex) {}
+
+    record AddQuestRequest(@NotBlank String title, @NotBlank String axisCode, @NotNull Integer level) {}
 }

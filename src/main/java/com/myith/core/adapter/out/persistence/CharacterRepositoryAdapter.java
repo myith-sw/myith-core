@@ -5,6 +5,7 @@ import com.myith.core.domain.character.Character;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public class CharacterRepositoryAdapter implements CharacterRepository {
@@ -25,5 +26,18 @@ public class CharacterRepositoryAdapter implements CharacterRepository {
     @Override
     public List<String> findSpeciesByUserId(Long userId) {
         return jpaRepository.findDistinctSpeciesByUserId(userId);
+    }
+
+    @Override
+    public List<Character> findByUserId(Long userId) {
+        return jpaRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
+                .map(CharacterJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public Optional<Character> findByRoadmapId(Long roadmapId) {
+        return jpaRepository.findByRoadmapIdAndDeletedAtIsNull(roadmapId)
+                .map(CharacterJpaEntity::toDomain);
     }
 }

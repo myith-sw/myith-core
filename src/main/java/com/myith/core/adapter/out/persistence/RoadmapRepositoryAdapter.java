@@ -38,4 +38,12 @@ public class RoadmapRepositoryAdapter implements RoadmapRepository {
                 .map(RoadmapJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<Roadmap> findActiveByUserId(Long userId) {
+        return jpaRepository.findByUserIdAndStatusAndDeletedAtIsNull(userId, RoadmapStatus.ACTIVE.name())
+                .stream()
+                .map(RoadmapJpaEntity::toDomain)
+                .toList();
+    }
 }

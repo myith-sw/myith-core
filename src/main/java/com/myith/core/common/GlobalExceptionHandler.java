@@ -4,7 +4,9 @@ import com.myith.core.application.auth.AuthService;
 import com.myith.core.application.auth.GoogleTokenVerifier;
 import com.myith.core.application.auth.UserService;
 import com.myith.core.application.roadmap.JobQueryService;
+import com.myith.core.application.quest.QuestManageService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
+import com.myith.core.application.roadmap.RoadmapQueryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -51,6 +53,36 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUserNotFound(UserService.UserNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(RoadmapQueryService.RoadmapNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRoadmapNotFound(RoadmapQueryService.RoadmapNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("ROADMAP_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(RoadmapQueryService.RoadmapAccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRoadmapAccessDenied(RoadmapQueryService.RoadmapAccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("ROADMAP_ACCESS_DENIED", e.getMessage()));
+    }
+
+    @ExceptionHandler(QuestManageService.QuestNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleQuestNotFound(QuestManageService.QuestNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("QUEST_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(QuestManageService.CannotDeleteNonCustomQuestException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCannotDeleteNonCustom(QuestManageService.CannotDeleteNonCustomQuestException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("CANNOT_DELETE_NON_CUSTOM", e.getMessage()));
+    }
+
+    @ExceptionHandler(QuestManageService.OptimisticLockConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(QuestManageService.OptimisticLockConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("OPTIMISTIC_LOCK_CONFLICT", e.getMessage()));
     }
 
     @ExceptionHandler(RoadmapCreateService.DuplicateSpeciesException.class)

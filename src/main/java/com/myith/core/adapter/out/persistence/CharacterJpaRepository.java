@@ -5,10 +5,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CharacterJpaRepository extends JpaRepository<CharacterJpaEntity, Long> {
 
     List<CharacterJpaEntity> findByUserIdAndDeletedAtIsNull(Long userId);
+
+    Optional<CharacterJpaEntity> findByRoadmapIdAndDeletedAtIsNull(Long roadmapId);
 
     @Query("SELECT DISTINCT c.species FROM CharacterJpaEntity c WHERE c.userId = :userId AND c.deletedAt IS NULL")
     List<String> findDistinctSpeciesByUserId(@Param("userId") Long userId);
