@@ -43,4 +43,7 @@ public class DiagnosisJpaEntity {
         d.setId(id);
         return d;
     }
+
+    public String getSkillCode() { return skillCode; }
+    public java.math.BigDecimal getMastery() { return mastery; }
 }
