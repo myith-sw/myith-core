@@ -3,6 +3,7 @@ package com.myith.core.common;
 import com.myith.core.application.auth.AuthService;
 import com.myith.core.application.auth.GoogleTokenVerifier;
 import com.myith.core.application.auth.UserService;
+import com.myith.core.application.roadmap.JobQueryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -49,6 +50,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUserNotFound(UserService.UserNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(JobQueryService.JobProfileNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleJobProfileNotFound(JobQueryService.JobProfileNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("JOB_PROFILE_NOT_FOUND", e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
