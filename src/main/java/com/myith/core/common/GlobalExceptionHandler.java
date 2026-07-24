@@ -4,9 +4,11 @@ import com.myith.core.application.auth.AuthService;
 import com.myith.core.application.auth.GoogleTokenVerifier;
 import com.myith.core.application.auth.UserService;
 import com.myith.core.application.roadmap.JobQueryService;
+import com.myith.core.application.export.ExportService;
 import com.myith.core.application.quest.QuestManageService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapQueryService;
+import com.myith.core.application.upload.UploadService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -89,6 +91,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleDuplicateSpecies(RoadmapCreateService.DuplicateSpeciesException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("DUPLICATE_SPECIES", e.getMessage()));
+    }
+
+    @ExceptionHandler(ExportService.UnsupportedFormatException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedFormat(ExportService.UnsupportedFormatException e) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("UNSUPPORTED_FORMAT", e.getMessage()));
+    }
+
+    @ExceptionHandler(UploadService.InvalidFileException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidFile(UploadService.InvalidFileException e) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("INVALID_FILE", e.getMessage()));
     }
 
     @ExceptionHandler(JobQueryService.JobProfileNotFoundException.class)

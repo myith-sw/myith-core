@@ -1,6 +1,7 @@
 package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.dashboard.DashboardQueryService;
+import com.myith.core.application.export.ExportService;
 import com.myith.core.application.quest.QuestManageService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapCreateService.*;
@@ -28,15 +29,18 @@ public class RoadmapController {
     private final RoadmapQueryService roadmapQueryService;
     private final QuestManageService questManageService;
     private final DashboardQueryService dashboardQueryService;
+    private final ExportService exportService;
 
     public RoadmapController(RoadmapCreateService roadmapCreateService,
                              RoadmapQueryService roadmapQueryService,
                              QuestManageService questManageService,
-                             DashboardQueryService dashboardQueryService) {
+                             DashboardQueryService dashboardQueryService,
+                             ExportService exportService) {
         this.roadmapCreateService = roadmapCreateService;
         this.roadmapQueryService = roadmapQueryService;
         this.questManageService = questManageService;
         this.dashboardQueryService = dashboardQueryService;
+        this.exportService = exportService;
     }
 
     @PostMapping
@@ -103,6 +107,18 @@ public class RoadmapController {
             @AuthenticationPrincipal Long userId,
             @PathVariable Long roadmapId) {
         return ResponseEntity.ok(ApiResponse.success(dashboardQueryService.getDashboard(userId, roadmapId)));
+    }
+
+    @GetMapping("/{roadmapId}/export")
+    public ResponseEntity<byte[]> export(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long roadmapId,
+            @RequestParam(defaultValue = "md") String format) {
+        ExportService.ExportResult result = exportService.export(userId, roadmapId, format);
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"" + result.fileName() + "\"")
+                .header("Content-Type", result.contentType())
+                .body(result.content());
     }
 
     // ===== Request DTOs =====
