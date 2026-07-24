@@ -76,6 +76,10 @@ policy:
     master-data-ttl-seconds: ${CACHE_MASTER_TTL:86400}
   optimistic-lock:
     max-retries: ${LOCK_MAX_RETRIES:3}
+  outbox:
+    relay-interval-ms: ${OUTBOX_RELAY_INTERVAL:1000}
+  consistency:
+    max-retries: ${CONSISTENCY_MAX_RETRIES:3}
   analysis:
     timeout-seconds: ${ANALYSIS_TIMEOUT:120}
   upload:
