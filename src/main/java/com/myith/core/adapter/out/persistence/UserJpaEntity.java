@@ -66,4 +66,7 @@ public class UserJpaEntity {
         user.setId(id);
         return user;
     }
+
+    public Long getId() { return id; }
+    public void setLastNudgeSentAt(java.time.Instant lastNudgeSentAt) { this.lastNudgeSentAt = lastNudgeSentAt; }
 }
