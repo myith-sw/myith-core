@@ -289,9 +289,10 @@ POST /api/uploads/presign { fileName, contentType }
 POST /api/roadmaps
   { jobCode, profileVersion, species, nickname?,
     answers:[{ skillCode, mastery }],
-    narrative?:{ experience, strength, difficulty }, repoUrl?, fileKey? }
+    narrative?:{ strength, difficulty },
+    experiences?:[{ content?, repoUrl?, fileKey? }] }
 → 200 { roadmapId }   // 선택형만 → 즉시 조립
-→ 202 { roadmapId }   // 비정형 → 비동기, 정합성 스케줄러가 폴백(D-13)
+→ 202 { roadmapId }   // 비정형(narrative 또는 experiences 존재) → 비동기, 정합성 스케줄러가 폴백(D-13)
 
 GET /api/roadmaps/{id}/progress  (SSE)
 → event: progress { step, percent } / done { roadmapId } / error { code, message }
@@ -363,6 +364,30 @@ POST /api/heartbeat → { nudge, characterState:{ species, stage, completionRate
 
 발행: `RoadmapGenerationRequested`, `JobProfileBuildRequested`, `StarFeedbackRequested`
 소비: `RoadmapGenerationProgress`, `CompetencyExtracted`, `JobProfileBuilt`, `StarFeedbackCompleted`
+
+### RoadmapGenerationRequested payload
+
+```json
+{
+  "roadmapId": 1,
+  "userId": 1,
+  "jobCode": "server",
+  "profileVersion": 1,
+  "answers": [{ "skillCode": "git", "mastery": 0.66 }],
+  "narrative": { "strength": "...", "difficulty": "..." },
+  "experiences": [
+    { "content": "경험 서술", "repoUrl": "https://...", "fileKey": "portfolio/..." },
+    { "content": "경험 서술 2", "repoUrl": null, "fileKey": "portfolio/..." }
+  ]
+}
+```
+
+- `narrative`: 강점·어려움 서술. `experience` 필드는 `experiences[].content`로 이동됨.
+- `experiences`: 프로젝트 경험 카드 배열. 사용자가 여러 개 등록 가능. 각 카드에 서술·링크·파일이 독립.
+  - `content`: 경험 서술 텍스트 (nullable)
+  - `repoUrl`: GitHub 저장소 URL (nullable) — 여러 개일 수 있으므로 순회 처리
+  - `fileKey`: S3 파일 키 (nullable) — 여러 개일 수 있으므로 각각 가져와 파싱
+- `narrative`와 `experiences` 모두 null이면 선택형 경로(즉시 조립), 하나라도 있으면 비동기 경로.
 
 ## CQRS 스냅샷
 

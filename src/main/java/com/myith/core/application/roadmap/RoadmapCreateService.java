@@ -77,8 +77,7 @@ public class RoadmapCreateService {
 
         // 4. 비정형 입력 존재 여부 판단
         boolean hasNarrative = cmd.narrative() != null
-                || (cmd.repoUrl() != null && !cmd.repoUrl().isBlank())
-                || (cmd.fileKey() != null && !cmd.fileKey().isBlank());
+                || (cmd.experiences() != null && !cmd.experiences().isEmpty());
 
         GenerationState initialState = hasNarrative ? GenerationState.ANALYZING : GenerationState.READY;
 
@@ -156,8 +155,7 @@ public class RoadmapCreateService {
         payload.put("profileVersion", cmd.profileVersion());
         payload.put("answers", cmd.answers());
         if (cmd.narrative() != null) payload.put("narrative", cmd.narrative());
-        if (cmd.repoUrl() != null) payload.put("repoUrl", cmd.repoUrl());
-        if (cmd.fileKey() != null) payload.put("fileKey", cmd.fileKey());
+        if (cmd.experiences() != null && !cmd.experiences().isEmpty()) payload.put("experiences", cmd.experiences());
 
         try {
             String payloadJson = objectMapper.writeValueAsString(payload);
@@ -180,11 +178,13 @@ public class RoadmapCreateService {
 
     public record CreateCommand(String jobCode, int profileVersion, String species, String nickname,
                                 List<AnswerDto> answers, NarrativeDto narrative,
-                                String repoUrl, String fileKey) {}
+                                List<ExperienceDto> experiences) {}
 
     public record AnswerDto(String skillCode, BigDecimal mastery) {}
 
-    public record NarrativeDto(String experience, String strength, String difficulty) {}
+    public record NarrativeDto(String strength, String difficulty) {}
+
+    public record ExperienceDto(String content, String repoUrl, String fileKey) {}
 
     public record CreateResult(Long roadmapId, boolean async) {}
 

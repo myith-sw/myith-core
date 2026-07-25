@@ -2,7 +2,11 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.quest.QuestManageService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
-import com.myith.core.application.roadmap.RoadmapCreateService.*;
+import com.myith.core.application.roadmap.RoadmapCreateService.CreateCommand;
+import com.myith.core.application.roadmap.RoadmapCreateService.CreateResult;
+import com.myith.core.application.roadmap.RoadmapCreateService.AnswerDto;
+import com.myith.core.application.roadmap.RoadmapCreateService.NarrativeDto;
+import com.myith.core.application.roadmap.RoadmapCreateService.ExperienceDto;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.common.ApiResponse;
 import com.myith.core.common.IdCodec;
@@ -49,8 +53,8 @@ public class RoadmapController {
     @Operation(
             summary = "로드맵 생성",
             description = """
-                    narrative·repoUrl·fileKey는 전부 optional이다.
-                    셋 중 하나라도 있으면 202(비동기 분석, generationState: ANALYZING),
+                    narrative·experiences는 전부 optional이다.
+                    둘 중 하나라도 있으면 202(비동기 분석, generationState: ANALYZING),
                     없으면 200(즉시 조립, generationState: READY).
                     같은 직무의 기존 ACTIVE 로드맵이 있으면 자동으로 ARCHIVED 처리하고 새로 만든다. STAR 기록은 보존된다.
                     검증: nickname trim 후 1~20자 / jobCode는 available: true여야 함 / 모든 필수 문항 응답 필요.""",
@@ -101,10 +105,13 @@ public class RoadmapController {
                         .map(a -> new AnswerDto(a.skillCode(), levelToMastery(a.level())))
                         .toList(),
                 request.narrative() != null
-                        ? new NarrativeDto(request.narrative().experience(),
-                        request.narrative().strength(), request.narrative().difficulty())
+                        ? new NarrativeDto(request.narrative().strength(), request.narrative().difficulty())
                         : null,
-                request.repoUrl(), request.fileKey()
+                request.experiences() != null
+                        ? request.experiences().stream()
+                        .map(e -> new ExperienceDto(e.content(), e.repoUrl(), e.fileKey()))
+                        .toList()
+                        : null
         );
         CreateResult result = roadmapCreateService.create(userId, cmd);
         HttpStatus status = result.async() ? HttpStatus.ACCEPTED : HttpStatus.OK;
@@ -375,12 +382,10 @@ public class RoadmapController {
             @Size(min = 1, max = 20) String nickname,
             @Schema(description = "자가진단 응답 목록. 모든 필수 문항에 대해 응답해야 한다")
             @NotEmpty List<AnswerRequest> answers,
-            @Schema(description = "서술형 입력. 하나라도 있으면 202 비동기 분석")
+            @Schema(description = "자기 평가 서술 (강점·어려움). 있으면 202 비동기 분석")
             NarrativeRequest narrative,
-            @Schema(description = "GitHub 저장소 URL (optional)", example = "https://github.com/user/community")
-            String repoUrl,
-            @Schema(description = "POST /api/uploads/presign에서 받은 파일 키 (optional)", example = "portfolio/usr_01J3ABC/9f2c1d.pdf")
-            String fileKey
+            @Schema(description = "프로젝트 경험 카드 목록. 있으면 202 비동기 분석. 카드별 서술·링크·파일을 각각 전달")
+            List<ExperienceRequest> experiences
     ) {}
 
     @Schema(name = "AnswerRequest")
@@ -394,12 +399,20 @@ public class RoadmapController {
 
     @Schema(name = "NarrativeRequest")
     record NarrativeRequest(
-            @Schema(description = "경험 서술", example = "스프링으로 커뮤니티 CRUD를 만들어봤습니다.")
-            String experience,
             @Schema(description = "강점 서술", example = "Java와 Spring이 가장 익숙합니다.")
             String strength,
             @Schema(description = "어려움 서술", example = "성능 최적화는 아직 해본 적이 없습니다.")
             String difficulty
+    ) {}
+
+    @Schema(name = "ExperienceRequest")
+    record ExperienceRequest(
+            @Schema(description = "경험 서술", example = "스프링으로 커뮤니티 CRUD를 만들어봤습니다.")
+            String content,
+            @Schema(description = "GitHub 저장소 URL", example = "https://github.com/user/community")
+            String repoUrl,
+            @Schema(description = "POST /api/uploads/presign에서 받은 파일 키", example = "portfolio/usr_01J3ABC/9f2c1d.pdf")
+            String fileKey
     ) {}
 
     @Schema(name = "CreateRoadmapResponse")

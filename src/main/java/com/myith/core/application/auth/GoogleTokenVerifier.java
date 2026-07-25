@@ -7,6 +7,9 @@ import com.google.api.client.json.gson.GsonFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
@@ -14,9 +17,14 @@ import java.util.Collections;
 @Component
 public class GoogleTokenVerifier {
 
+    private static final Logger log = LoggerFactory.getLogger(GoogleTokenVerifier.class);
+
     private final GoogleIdTokenVerifier verifier;
 
     public GoogleTokenVerifier(@Value("${google.client-id}") String clientId) {
+        log.info("Google OAuth client-id configured: {}...{}",
+                clientId.length() > 8 ? clientId.substring(0, 8) : clientId,
+                clientId.length() > 8 ? clientId.substring(clientId.length() - 4) : "");
         this.verifier = new GoogleIdTokenVerifier.Builder(
                 new NetHttpTransport(), GsonFactory.getDefaultInstance())
                 .setAudience(Collections.singletonList(clientId))
@@ -36,8 +44,14 @@ public class GoogleTokenVerifier {
                     (String) payload.get("name"),
                     (String) payload.get("picture")
             );
+        } catch (InvalidGoogleTokenException e) {
+            throw e;
         } catch (GeneralSecurityException | IOException e) {
+            log.error("Google verification infrastructure error", e);
             throw new GoogleVerificationException("Google token verification failed", e);
+        } catch (Exception e) {
+            log.warn("Malformed Google ID token", e);
+            throw new InvalidGoogleTokenException("Invalid Google ID token");
         }
     }
 
