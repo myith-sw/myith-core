@@ -91,7 +91,7 @@ public class AiEnhancementController {
             @Schema(description = "퀘스트 ID. COMPLETED 시에만 포함", example = "qst_05") String questId,
             @Schema(description = "처리 상태", example = "COMPLETED",
                     allowableValues = {"PROCESSING", "COMPLETED", "FAILED"}) String status,
-            @Schema(description = "화면 4-2 AI 비교 모달 오른쪽. COMPLETED 시에만 포함") EnhancedStar enhancedStar,
+            @Schema(description = "화면 4-2 AI 비교 모달 오른쪽. COMPLETED 시에만 포함. status가 PROCESSING이면 null", nullable = true) EnhancedStar enhancedStar,
             @Schema(description = "화면 4-2 항목별 개선 힌트. COMPLETED 시에만 포함") List<FeedbackEntry> feedback,
             @Schema(description = "화면 4-2·5 자기소개서 초안 영역. COMPLETED 시에만 포함",
                     example = "대용량 조회 성능 문제를 캐시 도입으로 해결한 경험이 있습니다. ...") String resumeDraft,

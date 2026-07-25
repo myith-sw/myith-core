@@ -1,6 +1,7 @@
 package com.myith.core.adapter.in.web;
 
 import com.myith.core.adapter.in.sse.SseRegistry;
+import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -55,7 +56,7 @@ public class SseController {
                     }))
     @GetMapping(value = "/api/roadmaps/{roadmapId}/progress", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter progress(@AuthenticationPrincipal Long userId,
-                               @PathVariable Long roadmapId) {
-        return sseRegistry.register(roadmapId);
+                               @PathVariable String roadmapId) {
+        return sseRegistry.register(IdCodec.decode(roadmapId));
     }
 }

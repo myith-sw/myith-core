@@ -3,6 +3,7 @@ package com.myith.core.adapter.in.web;
 import com.myith.core.application.dashboard.DashboardQueryService;
 import com.myith.core.application.export.ExportService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -98,8 +99,8 @@ public class DashboardController {
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<DashboardResponse>> getDashboard(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId) {
-        DashboardQueryService.DashboardDto dto = dashboardQueryService.getDashboard(userId, roadmapId);
+            @PathVariable String roadmapId) {
+        DashboardQueryService.DashboardDto dto = dashboardQueryService.getDashboard(userId, IdCodec.decode(roadmapId));
         DashboardResponse response = new DashboardResponse(
                 new DashboardCharacterResponse(
                         "견습 서버 개발자", "백엔드 개발자", "deokbaseu",
@@ -175,11 +176,11 @@ public class DashboardController {
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId,
+            @PathVariable String roadmapId,
             @Parameter(description = "내보내기 형식. md(자소서 프롬프트) 또는 pdf(원본 STAR)",
                     schema = @Schema(allowableValues = {"md", "pdf"}, defaultValue = "md"))
             @RequestParam(defaultValue = "md") String format) {
-        ExportService.ExportResult result = exportService.export(userId, roadmapId, format);
+        ExportService.ExportResult result = exportService.export(userId, IdCodec.decode(roadmapId), format);
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename*=UTF-8''myith-server-export." + format)
                 .header("Content-Type", result.contentType())

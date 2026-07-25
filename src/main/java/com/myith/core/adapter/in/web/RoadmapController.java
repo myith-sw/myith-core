@@ -5,6 +5,7 @@ import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapCreateService.*;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.IdCodec;
 import com.myith.core.domain.roadmap.Quest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -184,8 +185,8 @@ public class RoadmapController {
     @GetMapping("/{roadmapId}")
     public ResponseEntity<ApiResponse<RoadmapDetailResponse>> getDetail(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId) {
-        RoadmapQueryService.RoadmapDetailDto dto = roadmapQueryService.getDetail(userId, roadmapId);
+            @PathVariable String roadmapId) {
+        RoadmapQueryService.RoadmapDetailDto dto = roadmapQueryService.getDetail(userId, IdCodec.decode(roadmapId));
         RoadmapDetailResponse response = new RoadmapDetailResponse(
                 "rmp_" + dto.roadmapId(), dto.generationState(), "ACTIVE",
                 "server", dto.jobName(), dto.tagline(),
@@ -246,9 +247,9 @@ public class RoadmapController {
     @PostMapping("/{roadmapId}/quests")
     public ResponseEntity<ApiResponse<AddQuestResponse>> addQuest(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId,
+            @PathVariable String roadmapId,
             @Valid @RequestBody AddQuestRequest request) {
-        Quest quest = questManageService.addCustomQuest(userId, roadmapId,
+        Quest quest = questManageService.addCustomQuest(userId, IdCodec.decode(roadmapId),
                 request.title(), request.axisCode(), request.level());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of(new AddQuestResponse(
@@ -314,12 +315,13 @@ public class RoadmapController {
     @PatchMapping("/{roadmapId}/quests/order")
     public ResponseEntity<ApiResponse<ReorderResponse>> reorderQuest(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId,
+            @PathVariable String roadmapId,
             @Valid @RequestBody ReorderRequest request) {
-        questManageService.reorderQuest(userId, roadmapId,
-                request.questId(), request.targetLevel(), request.targetIndex());
+        Long roadmapLongId = IdCodec.decode(roadmapId);
+        questManageService.reorderQuest(userId, roadmapLongId,
+                IdCodec.decode(request.questId()), request.targetLevel(), request.targetIndex());
         // 재조회하여 갱신된 전체 목록 반환
-        RoadmapQueryService.RoadmapDetailDto dto = roadmapQueryService.getDetail(userId, roadmapId);
+        RoadmapQueryService.RoadmapDetailDto dto = roadmapQueryService.getDetail(userId, roadmapLongId);
         List<RoadmapLevelResponse> levels = dto.levels().stream().map(l -> new RoadmapLevelResponse(
                 l.level(),
                 l.quests().stream().map(q -> new RoadmapQuestResponse(
@@ -353,9 +355,9 @@ public class RoadmapController {
     @DeleteMapping("/{roadmapId}/quests/{questId}")
     public ResponseEntity<Void> deleteQuest(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId,
-            @PathVariable Long questId) {
-        questManageService.deleteQuest(userId, roadmapId, questId);
+            @PathVariable String roadmapId,
+            @PathVariable String questId) {
+        questManageService.deleteQuest(userId, IdCodec.decode(roadmapId), IdCodec.decode(questId));
         return ResponseEntity.noContent().build();
     }
 
@@ -514,8 +516,8 @@ public class RoadmapController {
 
     @Schema(name = "ReorderRequest")
     record ReorderRequest(
-            @Schema(description = "이동할 퀘스트 ID (서버 내부 ID)", example = "2")
-            @NotNull Long questId,
+            @Schema(description = "이동할 퀘스트 ID", example = "qst_02")
+            @NotBlank String questId,
             @Schema(description = "이동 대상 레벨", example = "1")
             @NotNull Integer targetLevel,
             @Schema(description = "이동 대상 인덱스 (0부터)", example = "0")

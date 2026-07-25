@@ -2,6 +2,7 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.quest.QuestDetailService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -72,8 +73,8 @@ public class QuestController {
     @GetMapping("/{questId}")
     public ResponseEntity<ApiResponse<QuestDetailResponse>> getDetail(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId) {
-        QuestDetailService.QuestDetailDto dto = questDetailService.getDetail(userId, questId);
+            @PathVariable String questId) {
+        QuestDetailService.QuestDetailDto dto = questDetailService.getDetail(userId, IdCodec.decode(questId));
         QuestDetailResponse response = new QuestDetailResponse(
                 "qst_" + dto.questId(), "rmp_01J3ABC", dto.level(),
                 "cs", dto.axisName(), dto.title(), dto.status(), "ACTIVITY", 1, 0,
@@ -134,13 +135,13 @@ public class QuestController {
     @PutMapping("/{questId}/star")
     public ResponseEntity<ApiResponse<SaveStarResponse>> saveStar(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId,
+            @PathVariable String questId,
             @RequestBody SaveStarRequest request) {
-        questDetailService.saveStar(userId, questId,
+        questDetailService.saveStar(userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
         return ResponseEntity.ok(ApiResponse.of(new SaveStarResponse(
-                "qst_" + questId, request.star(),
+                questId, request.star(),
                 request.source() != null ? request.source() : "manual",
                 "PENDING", null
         )));
@@ -215,10 +216,10 @@ public class QuestController {
     @PatchMapping("/{questId}/complete")
     public ResponseEntity<ApiResponse<CompleteResponse>> toggleComplete(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId,
+            @PathVariable String questId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CompleteRequest request) {
-        questDetailService.toggleComplete(userId, questId, request.completed(), request.version());
+        questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version());
         // 실제 구현에서는 스냅샷에서 characterChanges, radar 등을 가져와 반환한다.
         // 문서화 목적이므로 구조만 정의한다.
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -276,7 +277,7 @@ public class QuestController {
     @PostMapping("/{questId}/ai-enhancements")
     public ResponseEntity<ApiResponse<AiEnhancementAcceptedResponse>> requestAiEnhancement(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId,
+            @PathVariable String questId,
             @Valid @RequestBody AiEnhancementRequest request) {
         // 미구현 — Outbox 발행 후 requestId를 반환
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -301,8 +302,8 @@ public class QuestController {
             @Schema(description = "화면 4-2 '완료 기준' 박스", example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
             @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스. source: CUSTOM이면 null") NcsUnitResponse ncsUnit,
             @Schema(description = "화면 4-2 '추천 자격'. 빈 배열이면 '해당 없음'") List<CertResponse> certifications,
-            @Schema(description = "화면 4-2 STAR 입력칸 4개 초기값. null이면 빈 값으로 시작") StarResponse star,
-            @Schema(description = "STAR 출처. manual | ai-assisted", example = "null") String starSource,
+            @Schema(description = "화면 4-2 STAR 입력칸 4개 초기값. null이면 빈 값으로 시작", nullable = true) StarResponse star,
+            @Schema(description = "STAR 출처. manual | ai-assisted", nullable = true) String starSource,
             @Schema(description = "최근 수정일", example = "2026-07-24T03:00:00Z") String updatedAt
     ) {}
 
