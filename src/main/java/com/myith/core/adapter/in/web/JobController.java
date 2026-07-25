@@ -50,7 +50,7 @@ public class JobController {
                                         "jobCode": "server",
                                         "jobName": "백엔드 개발자",
                                         "tagline": "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다.",
-                                        "keywords": ["프로그래밍 기초","CS·자료구조","데이터입출력","서버·API","협업·형상관리","배포·운영"],
+                                        "keywords": ["프로그래밍 기초","CS·자료구조","데이터입출력","서버·API","협업·형상관리"],
                                         "available": true
                                       },
                                       {

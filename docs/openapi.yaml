@@ -11,429 +11,173 @@ info:
     공통 오류: { "error": { code, message, fieldErrors, requestId } }
   version: 0.1.0
 servers:
-- url: http://localhost:8080
-  description: 로컬
-- url: https://api.myith.example
-  description: 운영
+  - url: http://localhost:8080
+    description: 로컬
+  - url: https://api.myith.example
+    description: 운영
 security:
-- bearerAuth: []
+  - bearerAuth: []
 tags:
-- name: Catalog
-  description: 직무·자가진단 조회
-- name: Upload
-  description: 파일 업로드
-- name: Roadmap
-  description: 로드맵 생성·조회
-- name: Dashboard
-  description: 대시보드·경험카드·내보내기
-- name: Auth
-  description: 인증·사용자
-- name: Desktop
-  description: 데스크톱 앱 연동
-- name: Ops
-  description: 운영
-- name: Quest
-  description: 퀘스트·STAR
+  - name: Auth
+    description: 인증·사용자
+  - name: Catalog
+    description: 직무·자가진단 조회
+  - name: Upload
+    description: 파일 업로드
+  - name: Roadmap
+    description: 로드맵 생성·조회
+  - name: Quest
+    description: 퀘스트·STAR
+  - name: Dashboard
+    description: 대시보드·경험카드·내보내기
+  - name: Desktop
+    description: 데스크톱 앱 연동
+  - name: Ops
+    description: 운영
+
 paths:
-  /api/quests/{questId}/star:
-    put:
-      tags:
-      - Quest
-      summary: STAR 기록 저장 (임시 저장)
-      description: |-
-        각 필드 trim 후 0~2000자. 임시 저장이므로 빈 값을 허용한다.
-        최초 저장 시 퀘스트 상태가 OPEN → PENDING으로 바뀐다.
-        프론트는 textarea blur 또는 debounce로 호출한다.
-        AI 제안을 적용해 저장한 경우 source: "ai-assisted" + aiEnhancementId를 채운다.
-      operationId: saveStar
-      parameters:
-      - name: questId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SaveStarRequest"
-        required: true
-      responses:
-        "200":
-          description: 저장 성공
-          content:
-            application/json:
-              example:
-                data:
-                  questId: qst_05
-                  star:
-                    situation: 팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.
-                    task: 응답 시간을 500ms 이하로 줄여야 했다.
-                    action: N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.
-                    result: 평균 응답 시간이 200ms로 감소했다.
-                  source: manual
-                  status: PENDING
-                  updatedAt: 2026-07-24T03:10:00Z
-        "409":
-          description: QUEST_LOCKED — 잠긴 퀘스트에 쓰기 시도
-          content:
-            application/json:
-              example:
-                error:
-                  code: QUEST_LOCKED
-                  message: 선행 퀘스트를 먼저 완료해주세요.
-                  requestId: req_01J3ABC
-  /api/uploads/presign:
-    post:
-      tags:
-      - Upload
-      summary: S3 Presigned URL 발급
-      description: |-
-        프론트가 uploadUrl로 S3에 직접 PUT 업로드하고, fileKey만 로드맵 생성에 넘긴다.
-        서버는 파일 본문을 받지 않는다.
-        허용 타입: application/pdf, image/png, image/jpeg. 상한 10MB.
-      operationId: presign
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PresignRequest"
-        required: true
-      responses:
-        "200":
-          description: 발급 성공
-          content:
-            application/json:
-              example:
-                data:
-                  uploadUrl: https://myith-uploads.s3.ap-northeast-2.amazonaws.com/...
-                  fileKey: portfolio/usr_01J3ABC/9f2c1d.pdf
-                  expiresIn: 900
-        "400":
-          description: UNSUPPORTED_FILE_TYPE / FILE_TOO_LARGE
-          content:
-            application/json:
-              example:
-                error:
-                  code: UNSUPPORTED_FILE_TYPE
-                  message: 허용되지 않는 파일 형식입니다.
-                  requestId: req_01J3ABC
-  /api/roadmaps:
-    post:
-      tags:
-      - Roadmap
-      summary: 로드맵 생성
-      description: |-
-        narrative·repoUrl·fileKey는 전부 optional이다.
-        셋 중 하나라도 있으면 202(비동기 분석, generationState: ANALYZING),
-        없으면 200(즉시 조립, generationState: READY).
-        같은 직무의 기존 ACTIVE 로드맵이 있으면 자동으로 ARCHIVED 처리하고 새로 만든다. STAR 기록은 보존된다.
-        검증: nickname trim 후 1~20자 / jobCode는 available: true여야 함 / 모든 필수 문항 응답 필요.
-      operationId: createRoadmap
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        description: 멱등성 키 (optional)
-        required: false
-        schema:
-          type: string
-          example: 550e8400-e29b-41d4-a716-446655440000
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRoadmapRequest"
-        required: true
-      responses:
-        "200":
-          description: 즉시 조립 완료 (선택형만)
-          content:
-            application/json:
-              examples:
-                즉시 조립:
-                  description: 즉시 조립
-                  value:
-                    data:
-                      roadmapId: rmp_01J3ABC
-                      generationState: READY
-        "202":
-          description: 비동기 분석 접수 (서술형·repo·파일)
-          content:
-            application/json:
-              examples:
-                비동기 접수:
-                  description: 비동기 접수
-                  value:
-                    data:
-                      roadmapId: rmp_01J3ABC
-                      generationState: ANALYZING
-        "422":
-          description: VALIDATION_ERROR
-          content:
-            application/json:
-              example:
-                error:
-                  code: VALIDATION_ERROR
-                  message: 입력값이 올바르지 않습니다.
-                  fieldErrors:
-                    nickname: 닉네임은 1~20자여야 합니다.
-                  requestId: req_01J3ABC
-  /api/roadmaps/{roadmapId}/quests:
-    post:
-      tags:
-      - Roadmap
-      summary: 사용자 정의 퀘스트 추가
-      description: 화면 4-1 퀘스트 추가. source는 자동으로 CUSTOM으로 설정된다.
-      operationId: addQuest
-      parameters:
-      - name: roadmapId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AddQuestRequest"
-        required: true
-      responses:
-        "201":
-          description: 생성 성공
-          content:
-            application/json:
-              example:
-                data:
-                  questId: qst_99
-                  title: 사이드 프로젝트를 운영한다
-                  axisCode: server-api
-                  axisName: 서버·API
-                  level: 3
-                  status: OPEN
-                  source: CUSTOM
-                  order: 4
-                  version: 0
-        "422":
-          description: "VALIDATION_ERROR — title 1~80자, level은 해당 로드맵의 레벨 범위 내"
-          content:
-            application/json:
-              example:
-                error:
-                  code: VALIDATION_ERROR
-                  message: 입력값이 올바르지 않습니다.
-                  fieldErrors:
-                    title: 제목은 1~80자여야 합니다.
-                  requestId: req_01J3ABC
-  /api/quests/{questId}/ai-enhancements:
-    post:
-      tags:
-      - Quest
-      summary: STAR AI 보완 요청
-      description: |-
-        STAR 원문을 AI에게 보내 보완 제안·피드백·자기소개서 초안을 받는다.
-        서버는 원문을 수정하지 않는다. 사용자가 '적용'을 누르면 프론트가 textarea를 채우고 PUT /star로 저장한다.
-        202 수신 후 프론트가 GET /api/ai-enhancements/{requestId}를 짧은 간격으로 폴링한다.
-      operationId: requestAiEnhancement
-      parameters:
-      - name: questId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AiEnhancementRequest"
-        required: true
-      responses:
-        "202":
-          description: 비동기 접수
-          content:
-            application/json:
-              example:
-                data:
-                  requestId: aie_01J3ABC
-        "409":
-          description: QUEST_LOCKED
-          content:
-            application/json:
-              example:
-                error:
-                  code: QUEST_LOCKED
-                  message: 선행 퀘스트를 먼저 완료해주세요.
-                  requestId: req_01J3ABC
-        "422":
-          description: AI_INPUT_TOO_LONG / AI_SAFETY_REJECTED
-          content:
-            application/json:
-              example:
-                error:
-                  code: AI_INPUT_TOO_LONG
-                  message: 입력이 너무 깁니다. 각 항목을 2000자 이내로 작성해주세요.
-                  requestId: req_01J3ABC
-        "429":
-          description: AI_RATE_LIMITED
-          content:
-            application/json:
-              example:
-                error:
-                  code: AI_RATE_LIMITED
-                  message: AI 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.
-                  requestId: req_01J3ABC
-  /api/heartbeat:
-    post:
-      tags:
-      - Desktop
-      summary: 하트비트
-      description: |-
-        Electron 상주 앱 전용이다. 웹 프론트는 호출하지 않는다.
-        서버는 마지막 실제 서비스 활동 시각 기준으로 48시간 미접속을 판정해 nudge: true로 응답한다.
-        heartbeat 자체는 활동 시각을 갱신하지 않는다(갱신하면 48시간이 영원히 지나지 않는다).
-        캐릭터가 없으면 characterState: null.
-      operationId: heartbeat
-      responses:
-        "200":
-          description: 응답
-          content:
-            application/json:
-              example:
-                data:
-                  nudge: true
-                  characterState:
-                    species: deokbaseu
-                    stage: 4
-                    completionRate: 80
-  /api/auth/refresh:
-    post:
-      tags:
-      - Auth
-      summary: 토큰 갱신
-      description: |-
-        401 + TOKEN_EXPIRED 수신 시 프론트가 이 엔드포인트를 1회 호출하고 원 요청을 재시도한다.
-        재차 401이면 로그인 화면으로 보낸다.
-        refreshToken은 요청 바디로 받는다(httpOnly 쿠키 아님).
-      operationId: refresh
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshRequest"
-        required: true
-      responses:
-        "200":
-          description: 갱신 성공
-          content:
-            application/json:
-              example:
-                data:
-                  accessToken: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.new
-        "401":
-          description: INVALID_REFRESH_TOKEN — refreshToken 무효
-          content:
-            application/json:
-              example:
-                error:
-                  code: INVALID_REFRESH_TOKEN
-                  message: 유효하지 않은 토큰입니다.
-                  requestId: req_01J3ABC
-      security: []
+  # ═══════════════════ Auth ═══════════════════
   /api/auth/google:
     post:
-      tags:
-      - Auth
+      tags: [Auth]
       summary: 구글 로그인
+      operationId: googleLogin
       description: |-
         Google ID Token을 서버가 로컬 검증한다(캐싱된 공개키로 JWT 서명 검증).
         최초 로그인 시 자동 가입하고 users.nickname을 구글 이름으로 세팅한다.
         isNewUser로 프론트가 온보딩(알 선택 화면 1-1)으로 분기한다.
-      operationId: googleLogin
+      security: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GoogleLoginRequest"
-        required: true
+              $ref: '#/components/schemas/GoogleLoginRequest'
       responses:
-        "200":
+        '200':
           description: 로그인 성공
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GoogleLoginResponse'
               example:
                 data:
                   accessToken: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.abc
                   refreshToken: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.xyz
                   isNewUser: true
-        "401":
+        '401':
           description: INVALID_ID_TOKEN — Google ID Token 검증 실패
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
               example:
                 error:
                   code: INVALID_ID_TOKEN
                   message: Google ID Token 검증에 실패했습니다.
                   requestId: req_01J3ABC
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 토큰 갱신
+      operationId: refresh
+      description: |-
+        401 + TOKEN_EXPIRED 수신 시 프론트가 이 엔드포인트를 1회 호출하고 원 요청을 재시도한다.
+        재차 401이면 로그인 화면으로 보낸다.
+        refreshToken은 요청 바디로 받는다(httpOnly 쿠키 아님).
       security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: 갱신 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RefreshResponse'
+              example:
+                data:
+                  accessToken: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.new
+        '401':
+          description: INVALID_REFRESH_TOKEN — refreshToken 무효
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: INVALID_REFRESH_TOKEN
+                  message: 유효하지 않은 토큰입니다.
+                  requestId: req_01J3ABC
+
   /api/users/me:
     get:
-      tags:
-      - Auth
+      tags: [Auth]
       summary: 내 정보 조회
-      description: 현재 로그인한 사용자의 프로필 정보를 반환한다.
       operationId: getMe
+      description: 현재 로그인한 사용자의 프로필 정보를 반환한다.
       responses:
-        "200":
+        '200':
           description: 조회 성공
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserResponse'
               example:
                 data:
                   id: usr_01J3ABC
                   email: sungyoon@example.com
                   nickname: 이성윤
                   profileImageUrl: null
-                  createdAt: 2026-07-01T00:00:00Z
-    delete:
-      tags:
-      - Auth
-      summary: 회원 탈퇴
-      description: "soft delete + PII 익명화. email→deleted_{id}@myith.local, google_id→\
-        null, nickname→탈퇴한 사용자, profile_image_url→null."
-      operationId: deleteMe
-      responses:
-        "204":
-          description: 탈퇴 완료
+                  createdAt: "2026-07-01T00:00:00Z"
     patch:
-      tags:
-      - Auth
+      tags: [Auth]
       summary: 내 정보 수정
-      description: 닉네임 또는 프로필 이미지를 변경한다. 모든 필드는 optional이다.
       operationId: updateMe
+      description: 닉네임 또는 프로필 이미지를 변경한다. 모든 필드는 optional이다.
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateMeRequest"
-        required: true
+              $ref: '#/components/schemas/UpdateMeRequest'
       responses:
-        "200":
+        '200':
           description: 수정 성공
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserResponse'
               example:
                 data:
                   id: usr_01J3ABC
                   email: sungyoon@example.com
                   nickname: 새이름
                   profileImageUrl: null
-                  createdAt: 2026-07-01T00:00:00Z
-        "422":
+                  createdAt: "2026-07-01T00:00:00Z"
+        '422':
           description: VALIDATION_ERROR — nickname trim 후 1~20자
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
               example:
                 error:
                   code: VALIDATION_ERROR
@@ -441,245 +185,363 @@ paths:
                   fieldErrors:
                     nickname: 닉네임은 1~20자여야 합니다.
                   requestId: req_01J3ABC
-  /api/roadmaps/{roadmapId}/quests/order:
-    patch:
-      tags:
-      - Roadmap
-      summary: 퀘스트 순서 변경
-      description: 화면 4-1 드래그&드롭으로 퀘스트 순서를 변경한다. version은 낙관적 락용이다.
-      operationId: reorderQuest
-      parameters:
-      - name: roadmapId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReorderRequest"
-        required: true
+    delete:
+      tags: [Auth]
+      summary: 회원 탈퇴
+      operationId: deleteMe
+      description: "soft delete + PII 익명화. email→deleted_{id}@myith.local, google_id→null, nickname→탈퇴한 사용자, profile_image_url→null."
       responses:
-        "200":
-          description: 변경 성공. 갱신된 전체 레벨·퀘스트 목록 반환
-          content:
-            application/json:
-              example:
-                data:
-                  levels:
-                  - level: 1
-                    quests:
-                    - questId: qst_02
-                      title: 언어 기초로 토이앱을 만든다
-                      axisCode: programming
-                      axisName: 프로그래밍 기초
-                      status: ALREADY_KNOWN
-                      source: SKILL
-                      order: 1
-                      version: 1
-                    - questId: qst_01
-                      title: 버전관리로 협업한다
-                      axisCode: collaboration
-                      axisName: 협업·형상관리
-                      status: DONE
-                      source: SKILL
-                      order: 2
-                      version: 3
-        "409":
-          description: VERSION_CONFLICT — 낙관적 락 실패
-          content:
-            application/json:
-              example:
-                error:
-                  code: VERSION_CONFLICT
-                  message: 다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.
-                  requestId: req_01J3ABC
-  /api/quests/{questId}/complete:
-    patch:
-      tags:
-      - Quest
-      summary: 퀘스트 완료 토글
-      description: |-
-        STAR 본문은 여기서 보내지 않는다. PUT /star로 이미 저장된 값을 쓴다.
-        응답에 radar를 함께 내려 프론트가 레이더를 재조회 없이 갱신하게 한다.
-        409 VERSION_CONFLICT 응답에는 최신 version을 포함해 프론트가 재시도할 수 있게 한다.
-      operationId: toggleComplete
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        description: 멱등성 키 (optional)
-        required: false
-        schema:
-          type: string
-      - name: questId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CompleteRequest"
-        required: true
-      responses:
-        "200":
-          description: 완료 처리 성공
-          content:
-            application/json:
-              example:
-                data:
-                  quest:
-                    questId: qst_05
-                    status: DONE
-                    completedAt: 2026-07-24T03:20:00Z
-                    version: 4
-                  characterChanges:
-                    completionRate: 84
-                    stage: 4
-                    stageLabel: 완성
-                    level: 5
-                    nextQuest:
-                      questId: qst_06
-                      title: 테스트 코드를 작성한다
-                  unlockedQuestIds:
-                  - qst_07
-                  radar:
-                  - axisCode: programming
-                    axisName: 프로그래밍 기초
-                    percent: 72
-                  - axisCode: cs
-                    axisName: CS·자료구조
-                    percent: 80
-                  - axisCode: database
-                    axisName: 데이터입출력
-                    percent: 18
-                  - axisCode: server-api
-                    axisName: 서버·API
-                    percent: 67
-                  - axisCode: collaboration
-                    axisName: 협업·형상관리
-                    percent: 90
-                  - axisCode: deploy
-                    axisName: 배포·운영
-                    percent: 10
-        "409":
-          description: VERSION_CONFLICT / QUEST_LOCKED
-          content:
-            application/json:
-              examples:
-                VERSION_CONFLICT:
-                  description: VERSION_CONFLICT
-                  value:
-                    error:
-                      code: VERSION_CONFLICT
-                      message: 다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.
-                      requestId: req_01J3ABC
-                QUEST_LOCKED:
-                  description: QUEST_LOCKED
-                  value:
-                    error:
-                      code: QUEST_LOCKED
-                      message: 선행 퀘스트를 먼저 완료해주세요.
-                      requestId: req_01J3ABC
-  /api/star/records:
+        '204':
+          description: 탈퇴 완료
+
+  # ═══════════════════ Catalog ═══════════════════
+  /api/jobs:
     get:
-      tags:
-      - Dashboard
-      summary: 경험 카드(STAR 기록) 목록 조회
-      description: 화면 5(대시보드) 경험 카드 목록. 커서 기반 페이지네이션(OFFSET 금지).
-      operationId: getRecords
-      parameters:
-      - name: cursor
-        in: query
-        description: 커서
-        required: false
-        schema:
-          type: string
-        example: eyJpZCI6ImV4cF8wMSJ9
-      - name: size
-        in: query
-        description: "페이지 크기. 기본 20, 최대 100"
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 20
-        example: 20
-      - name: axis
-        in: query
-        description: 축 코드로 필터. 생략 시 전체
-        required: false
-        schema:
-          type: string
-        example: programming
-      - name: completeness
-        in: query
-        description: 완성도 필터. all | complete | partial (기본 all). complete = STAR 4칸
-          모두 채워짐
-        required: false
-        schema:
-          type: string
-          enum:
-          - all
-          - complete
-          - partial
-      - name: tag
-        in: query
-        description: star_record.tags 배열 필터
-        required: false
-        schema:
-          type: string
-        example: 리더십
+      tags: [Catalog]
+      summary: 직무 목록 조회
+      operationId: getJobs
+      description: |-
+        화면 2(캐릭터 생성) 직무 카드 목록에 사용한다.
+        available: false는 job_profile이 아직 없는 직무. 프론트가 '준비중' 잠긴 카드로 표시한다.
+        keywords는 job_profile 분야 축 상위 5개. 프로필이 없으면 빈 배열이다(null 아님).
       responses:
-        "200":
+        '200':
           description: 조회 성공
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/JobListResponse'
               example:
                 data:
-                - experienceId: exp_01
-                  questId: qst_02
-                  title: 언어 기초로 토이앱을 만든다
-                  axisCode: programming
-                  axisName: 프로그래밍 기초
-                  ncsUnitName: 프로그래밍언어활용
-                  star:
-                    situation: 팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.
-                    task: 응답 시간을 500ms 이하로 줄여야 했다.
-                    action: N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.
-                    result: 평균 응답 시간이 200ms로 감소했다.
-                  createdAt: 2026-07-22T05:00:00Z
-                meta:
-                  nextCursor: eyJpZCI6ImV4cF8wMSJ9
-                  hasNext: true
+                  categories:
+                    - categoryCode: it
+                      categoryName: "IT·개발"
+                      sortOrder: 1
+                      jobs:
+                        - jobCode: server
+                          jobName: 백엔드 개발자
+                          tagline: "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다."
+                          keywords: ["프로그래밍 기초","CS·자료구조","데이터입출력","서버·API","협업·형상관리"]
+                          available: true
+                        - jobCode: android
+                          jobName: 안드로이드 개발자
+                          tagline: 안드로이드 환경에서 동작하는 애플리케이션을 구현합니다.
+                          keywords: []
+                          available: false
+
+  /api/jobs/{jobCode}/diagnosis:
+    get:
+      tags: [Catalog]
+      summary: 자가진단 문항 조회
+      operationId: getDiagnosis
+      description: |-
+        화면 3(자가진단) 문항 목록을 반환한다.
+        문항 개수는 직무마다 다르다(6~10개). 배열 길이를 고정하지 않는다.
+        levels는 4단계 고정이다. mastery는 참고용이며 프론트는 id만 서버로 보낸다.
+        profileVersion은 프론트가 보관했다가 POST /api/roadmaps 요청에 그대로 실어 보낸다.
+      parameters:
+        - name: jobCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DiagnosisResponse'
+              example:
+                data:
+                  jobCode: server
+                  profileVersion: 1
+                  questions:
+                    - skillCode: lang-basic
+                      text: 프로그래밍 언어 기초를 이해한다
+                      axisCode: programming
+                      axisName: "프로그래밍 기초"
+                      sortOrder: 1
+                    - skillCode: data-structure
+                      text: 자료구조를 활용한다
+                      axisCode: cs
+                      axisName: "CS·자료구조"
+                      sortOrder: 2
+                    - skillCode: sql
+                      text: SQL로 데이터를 다룬다
+                      axisCode: database
+                      axisName: "데이터입출력"
+                      sortOrder: 3
+                    - skillCode: rest
+                      text: REST API 서버를 구현한다
+                      axisCode: server-api
+                      axisName: "서버·API"
+                      sortOrder: 4
+                    - skillCode: git
+                      text: 버전관리로 협업한다
+                      axisCode: collaboration
+                      axisName: "협업·형상관리"
+                      sortOrder: 5
+                    - skillCode: deploy
+                      text: 애플리케이션을 배포한다
+                      axisCode: deploy
+                      axisName: "배포·운영"
+                      sortOrder: 6
+                  levels:
+                    - { id: unknown, label: 모름, mastery: 0 }
+                    - { id: heard, label: 들어봄, mastery: 0.33 }
+                    - { id: tried, label: 해봄, mastery: 0.66 }
+                    - { id: independent, label: "혼자 가능", mastery: 1.0 }
+        '404':
+          description: JOB_PROFILE_NOT_READY — 해당 직무의 job_profile 미생성
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: JOB_PROFILE_NOT_READY
+                  message: 해당 직무의 프로필이 아직 준비되지 않았습니다.
+                  requestId: req_01J3ABC
+
+  # ═══════════════════ Upload ═══════════════════
+  /api/uploads/presign:
+    post:
+      tags: [Upload]
+      summary: S3 Presigned URL 발급
+      operationId: presign
+      description: |-
+        프론트가 uploadUrl로 S3에 직접 PUT 업로드하고, fileKey만 로드맵 생성에 넘긴다.
+        서버는 파일 본문을 받지 않는다.
+        허용 타입: application/pdf, image/png, image/jpeg. 상한 10MB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignRequest'
+      responses:
+        '200':
+          description: 발급 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PresignResponse'
+              example:
+                data:
+                  uploadUrl: "https://myith-uploads.s3.ap-northeast-2.amazonaws.com/..."
+                  fileKey: portfolio/usr_01J3ABC/9f2c1d.pdf
+                  expiresIn: 900
+        '400':
+          description: UNSUPPORTED_FILE_TYPE / FILE_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: UNSUPPORTED_FILE_TYPE
+                  message: 허용되지 않는 파일 형식입니다.
+                  requestId: req_01J3ABC
+
+  # ═══════════════════ Roadmap ═══════════════════
+  /api/characters:
+    get:
+      tags: [Roadmap]
+      summary: 캐릭터 목록 조회
+      operationId: getCharacters
+      description: |-
+        화면 1-1(알 선택, 캐릭터 없을 때)과 1-2(홈, 캐릭터 있을 때) 모두에 사용한다.
+        프론트는 응답의 species 목록으로 알 선택 화면에서 보유 종류를 제외한다.
+        nextQuest가 null이면 모든 퀘스트 완료 상태다.
+        사이드바 카드와 홈 화면 카드가 함께 쓴다.
+        status=archived로 아카이브된 로드맵을 조회한다(경험 카드 열람용).
+      parameters:
+        - name: status
+          in: query
+          description: "active | archived | all (기본 active)"
+          required: false
+          schema:
+            type: string
+            default: active
+            enum: [active, archived, all]
+          example: active
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CharacterSummary'
+              example:
+                data:
+                  - characterId: chr_01J3ABC
+                    roadmapId: rmp_01J3ABC
+                    species: deokbaseu
+                    nickname: "견습 서버 개발자"
+                    jobCode: server
+                    jobName: 백엔드 개발자
+                    tagline: "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다."
+                    roadmapStatus: ACTIVE
+                    completionRate: 80
+                    stage: 4
+                    stageLabel: 완성
+                    level: 4
+                    nextQuest:
+                      questId: qst_01J3ABC
+                      title: REST API 서버를 구현한다
+                    createdAt: "2026-07-20T02:00:00Z"
+                    updatedAt: "2026-07-24T03:00:00Z"
+
+  /api/roadmaps:
+    post:
+      tags: [Roadmap]
+      summary: 로드맵 생성
+      operationId: createRoadmap
+      description: |-
+        narrative·repoUrl·fileKey는 전부 optional이다.
+        셋 중 하나라도 있으면 202(비동기 분석, generationState: ANALYZING),
+        없으면 200(즉시 조립, generationState: READY).
+        같은 직무의 기존 ACTIVE 로드맵이 있으면 자동으로 ARCHIVED 처리하고 새로 만든다. STAR 기록은 보존된다.
+        검증: nickname trim 후 1~20자 / jobCode는 available: true여야 함 / 모든 필수 문항 응답 필요.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: 멱등성 키 (optional)
+          required: false
+          schema:
+            type: string
+            example: 550e8400-e29b-41d4-a716-446655440000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoadmapRequest'
+      responses:
+        '200':
+          description: 즉시 조립 완료 (선택형만)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CreateRoadmapResponse'
+              examples:
+                즉시조립:
+                  value:
+                    data:
+                      roadmapId: rmp_01J3ABC
+                      generationState: READY
+        '202':
+          description: 비동기 분석 접수 (서술형·repo·파일)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CreateRoadmapResponse'
+              examples:
+                비동기접수:
+                  value:
+                    data:
+                      roadmapId: rmp_01J3ABC
+                      generationState: ANALYZING
+        '422':
+          description: VALIDATION_ERROR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VALIDATION_ERROR
+                  message: 입력값이 올바르지 않습니다.
+                  fieldErrors:
+                    nickname: 닉네임은 1~20자여야 합니다.
+                  requestId: req_01J3ABC
+
+  /api/roadmaps/{roadmapId}/progress:
+    get:
+      tags: [Roadmap]
+      summary: 로드맵 생성 진행률 (SSE)
+      operationId: progress
+      description: |-
+        POST /api/roadmaps에서 202를 받은 뒤 구독한다.
+
+        이벤트 3종:
+        - event: progress — data: { "step": "증거 분석", "percent": 60 }
+        - event: done — data: { "roadmapId": "rmp_01J3ABC" }
+        - event: error — data: { "code": "ANALYSIS_FAILED", "message": "분석에 실패했습니다." }
+
+        연결이 끊겨도 결과는 서버에 저장된다.
+        재접속 시 GET /api/roadmaps/{roadmapId}로 완성본을 조회할 수 있다.
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE 스트림
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                progress:
+                  value: "event: progress\ndata: { \"step\": \"증거 분석\", \"percent\": 60 }\n"
+                done:
+                  value: "event: done\ndata: { \"roadmapId\": \"rmp_01J3ABC\" }\n"
+                error:
+                  value: "event: error\ndata: { \"code\": \"ANALYSIS_FAILED\", \"message\": \"분석에 실패했습니다.\" }\n"
+
   /api/roadmaps/{roadmapId}:
     get:
-      tags:
-      - Roadmap
+      tags: [Roadmap]
       summary: 로드맵 상세 조회
+      operationId: getDetail
       description: |-
         화면 4-1(로드맵 상세).
         levels는 오름차순, quests는 order 오름차순으로 내린다.
         레벨 개수는 직무마다 4~7개로 다르다. 구분선에는 "Lv.1"만 표시한다.
         잠긴 퀘스트(LOCKED)도 목록에 포함한다.
         version은 낙관적 락용이다. 프론트가 보관했다가 완료·순서변경 요청에 실어 보낸다.
-      operationId: getDetail
       parameters:
-      - name: roadmapId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
       responses:
-        "200":
+        '200':
           description: 조회 성공
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoadmapDetail'
               example:
                 data:
                   roadmapId: rmp_01J3ABC
@@ -691,162 +553,470 @@ paths:
                   character:
                     characterId: chr_01J3ABC
                     species: deokbaseu
-                    nickname: 견습 서버 개발자
+                    nickname: "견습 서버 개발자"
                     stage: 4
                     stageLabel: 완성
                     completionRate: 80
                   levels:
-                  - level: 1
-                    quests:
-                    - questId: qst_01
-                      title: 버전관리로 협업한다
-                      axisCode: collaboration
-                      axisName: 협업·형상관리
-                      status: DONE
-                      source: SKILL
-                      order: 1
-                      version: 3
-                    - questId: qst_02
-                      title: 언어 기초로 토이앱을 만든다
-                      axisCode: programming
-                      axisName: 프로그래밍 기초
-                      status: ALREADY_KNOWN
-                      source: SKILL
-                      order: 2
-                      version: 1
-                  updatedAt: 2026-07-24T03:00:00Z
-  /api/roadmaps/{roadmapId}/progress:
-    get:
-      tags:
-      - Roadmap
-      summary: 로드맵 생성 진행률 (SSE)
-      description: |-
-        POST /api/roadmaps에서 202를 받은 뒤 구독한다.
+                    - level: 1
+                      quests:
+                        - { questId: qst_01, title: "버전관리로 협업한다", axisCode: collaboration, axisName: "협업·형상관리", status: DONE, source: SKILL, order: 1, version: 3 }
+                        - { questId: qst_02, title: "언어 기초로 토이앱을 만든다", axisCode: programming, axisName: "프로그래밍 기초", status: ALREADY_KNOWN, source: SKILL, order: 2, version: 1 }
+                    - level: 2
+                      quests:
+                        - { questId: qst_03, title: "데이터베이스를 설계한다", axisCode: database, axisName: "데이터입출력", status: LOCKED, source: SKILL, order: 1, version: 0 }
+                  updatedAt: "2026-07-24T03:00:00Z"
 
-        이벤트 3종:
-        - event: progress — data: { "step": "증거 분석", "percent": 60 }
-        - event: done — data: { "roadmapId": "rmp_01J3ABC" }
-        - event: error — data: { "code": "ANALYSIS_FAILED", "message": "분석에 실패했습니다." }
-
-        연결이 끊겨도 결과는 서버에 저장된다.
-        재접속 시 GET /api/roadmaps/{roadmapId}로 완성본을 조회할 수 있다.
-      operationId: progress
+  /api/roadmaps/{roadmapId}/quests:
+    post:
+      tags: [Roadmap]
+      summary: 사용자 정의 퀘스트 추가
+      operationId: addQuest
+      description: 화면 4-1 퀘스트 추가. source는 자동으로 CUSTOM으로 설정된다.
       parameters:
-      - name: roadmapId
-        in: path
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
         required: true
-        schema:
-          type: integer
-          format: int64
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddQuestRequest'
       responses:
-        "200":
-          description: SSE 스트림
+        '201':
+          description: 생성 성공
           content:
-            text/event-stream:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/QuestItem'
+              example:
+                data:
+                  questId: qst_99
+                  title: 사이드 프로젝트를 운영한다
+                  axisCode: server-api
+                  axisName: "서버·API"
+                  level: 3
+                  status: OPEN
+                  source: CUSTOM
+                  order: 4
+                  version: 0
+        '422':
+          description: "VALIDATION_ERROR — title 1~80자, level은 해당 로드맵의 레벨 범위 내"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VALIDATION_ERROR
+                  message: 입력값이 올바르지 않습니다.
+                  fieldErrors:
+                    title: 제목은 1~80자여야 합니다.
+                  requestId: req_01J3ABC
+
+  /api/roadmaps/{roadmapId}/quests/order:
+    patch:
+      tags: [Roadmap]
+      summary: 퀘스트 순서 변경
+      operationId: reorderQuest
+      description: 화면 4-1 드래그&드롭으로 퀘스트 순서를 변경한다. version은 낙관적 락용이다.
+      parameters:
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      responses:
+        '200':
+          description: 변경 성공. 갱신된 전체 레벨·퀘스트 목록 반환
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      levels:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LevelGroup'
+              example:
+                data:
+                  levels:
+                    - level: 1
+                      quests:
+                        - { questId: qst_02, title: "언어 기초로 토이앱을 만든다", axisCode: programming, axisName: "프로그래밍 기초", status: ALREADY_KNOWN, source: SKILL, order: 1, version: 1 }
+                        - { questId: qst_01, title: "버전관리로 협업한다", axisCode: collaboration, axisName: "협업·형상관리", status: DONE, source: SKILL, order: 2, version: 3 }
+        '409':
+          description: VERSION_CONFLICT — 낙관적 락 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VERSION_CONFLICT
+                  message: 다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.
+                  requestId: req_01J3ABC
+
+  /api/roadmaps/{roadmapId}/quests/{questId}:
+    delete:
+      tags: [Roadmap]
+      summary: 퀘스트 삭제
+      operationId: deleteQuest
+      description: source가 CUSTOM인 사용자 정의 퀘스트만 삭제할 수 있다.
+      parameters:
+        - { name: roadmapId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: questId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '204':
+          description: 삭제 성공
+        '403':
+          description: CUSTOM_QUEST_ONLY — 사용자 정의 퀘스트가 아닌데 삭제 시도
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: CUSTOM_QUEST_ONLY
+                  message: 사용자 정의 퀘스트만 삭제할 수 있습니다.
+                  requestId: req_01J3ABC
+
+  # ═══════════════════ Quest ═══════════════════
+  /api/quests/{questId}:
+    get:
+      tags: [Quest]
+      summary: 퀘스트 상세 조회
+      operationId: getQuestDetail
+      description: |-
+        화면 4-2(퀘스트 상세 + STAR).
+        ncsUnit은 source: CUSTOM이면 null이다.
+        certifications는 연계 자격 전부를 내린다. 없으면 빈 배열(프론트가 '해당 없음' 표시).
+        star가 null이면 입력칸을 빈 값으로 시작한다.
+      parameters:
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/QuestDetail'
+              example:
+                data:
+                  questId: qst_05
+                  roadmapId: rmp_01J3ABC
+                  level: 5
+                  axisCode: cs
+                  axisName: "CS·자료구조"
+                  title: CS 면접 질문을 정리한다
+                  status: OPEN
+                  source: ACTIVITY
+                  order: 1
+                  version: 0
+                  completionCriteria: "네트워크·OS·DB 핵심 답안을 정리한다"
+                  ncsUnit:
+                    code: 2001010701_16v3
+                    name: 응용SW기초기술활용
+                    description: "자료구조와 알고리즘 등 기초 기술을 활용하는 능력"
+                  certifications:
+                    - name: 정보처리기사
+                  star: null
+                  starSource: null
+                  updatedAt: "2026-07-24T03:00:00Z"
+
+  /api/quests/{questId}/star:
+    put:
+      tags: [Quest]
+      summary: STAR 기록 저장 (임시 저장)
+      operationId: saveStar
+      description: |-
+        각 필드 trim 후 0~2000자. 임시 저장이므로 빈 값을 허용한다.
+        최초 저장 시 퀘스트 상태가 OPEN → PENDING으로 바뀐다.
+        프론트는 textarea blur 또는 debounce로 호출한다.
+        AI 제안을 적용해 저장한 경우 source: "ai-assisted" + aiEnhancementId를 채운다.
+      parameters:
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveStarRequest'
+      responses:
+        '200':
+          description: 저장 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SaveStarResponse'
+              example:
+                data:
+                  questId: qst_05
+                  star:
+                    situation: "팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다."
+                    task: "응답 시간을 500ms 이하로 줄여야 했다."
+                    action: "N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다."
+                    result: "평균 응답 시간이 200ms로 감소했다."
+                  source: manual
+                  status: PENDING
+                  updatedAt: "2026-07-24T03:10:00Z"
+        '409':
+          description: QUEST_LOCKED — 잠긴 퀘스트에 쓰기 시도
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: QUEST_LOCKED
+                  message: 선행 퀘스트를 먼저 완료해주세요.
+                  requestId: req_01J3ABC
+
+  /api/quests/{questId}/complete:
+    patch:
+      tags: [Quest]
+      summary: 퀘스트 완료 토글
+      operationId: toggleComplete
+      description: |-
+        STAR 본문은 여기서 보내지 않는다. PUT /star로 이미 저장된 값을 쓴다.
+        응답에 radar를 함께 내려 프론트가 레이더를 재조회 없이 갱신하게 한다.
+        409 VERSION_CONFLICT 응답에는 최신 version을 포함해 프론트가 재시도할 수 있게 한다.
+      parameters:
+        - { name: Idempotency-Key, in: header, description: "멱등성 키 (optional)", required: false, schema: { type: string } }
+        - { name: questId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequest'
+      responses:
+        '200':
+          description: 완료 처리 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CompleteResponse'
+              example:
+                data:
+                  quest:
+                    questId: qst_05
+                    status: DONE
+                    completedAt: "2026-07-24T03:20:00Z"
+                    version: 4
+                  characterChanges:
+                    completionRate: 84
+                    stage: 4
+                    stageLabel: 완성
+                    level: 5
+                    nextQuest: { questId: qst_06, title: "테스트 코드를 작성한다" }
+                  unlockedQuestIds: [qst_07]
+                  radar:
+                    - { axisCode: programming, axisName: "프로그래밍 기초", percent: 72 }
+                    - { axisCode: cs, axisName: "CS·자료구조", percent: 80 }
+                    - { axisCode: database, axisName: "데이터입출력", percent: 18 }
+                    - { axisCode: server-api, axisName: "서버·API", percent: 67 }
+                    - { axisCode: collaboration, axisName: "협업·형상관리", percent: 90 }
+                    - { axisCode: deploy, axisName: "배포·운영", percent: 10 }
+        '409':
+          description: VERSION_CONFLICT / QUEST_LOCKED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
               examples:
-                progress:
-                  description: progress
-                  value: |
-                    event: progress
-                    data: { "step": "증거 분석", "percent": 60 }
-                done:
-                  description: done
-                  value: |
-                    event: done
-                    data: { "roadmapId": "rmp_01J3ABC" }
-                error:
-                  description: error
-                  value: |
-                    event: error
-                    data: { "code": "ANALYSIS_FAILED", "message": "분석에 실패했습니다." }
-  /api/roadmaps/{roadmapId}/export:
-    get:
-      tags:
-      - Dashboard
-      summary: 로드맵 내보내기
+                VERSION_CONFLICT:
+                  value:
+                    error: { code: VERSION_CONFLICT, message: "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.", requestId: req_01J3ABC }
+                QUEST_LOCKED:
+                  value:
+                    error: { code: QUEST_LOCKED, message: "선행 퀘스트를 먼저 완료해주세요.", requestId: req_01J3ABC }
+
+  /api/quests/{questId}/ai-enhancements:
+    post:
+      tags: [Quest]
+      summary: STAR AI 보완 요청
+      operationId: requestAiEnhancement
       description: |-
-        format=md: 자소서 생성용 프롬프트 문서 (Content-Type: text/markdown; charset=utf-8).
-        format=pdf: 원본 STAR 열람용 PDF (Content-Type: application/pdf, 한글 폰트 임베딩).
-        대상: 해당 로드맵의 star IS NOT NULL인 경험 카드 전체(완성도 무관).
-      operationId: export
+        STAR 원문을 AI에게 보내 보완 제안·피드백·자기소개서 초안을 받는다.
+        서버는 원문을 수정하지 않는다. 사용자가 '적용'을 누르면 프론트가 textarea를 채우고 PUT /star로 저장한다.
+        202 수신 후 프론트가 GET /api/ai-enhancements/{requestId}를 짧은 간격으로 폴링한다.
       parameters:
-      - name: roadmapId
-        in: path
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
         required: true
-        schema:
-          type: integer
-          format: int64
-      - name: format
-        in: query
-        description: 내보내기 형식. md(자소서 프롬프트) 또는 pdf(원본 STAR)
-        required: false
-        schema:
-          type: string
-          enum:
-          - md
-          - pdf
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiEnhancementRequest'
       responses:
-        "200":
-          description: 파일 다운로드
-          headers:
-            Content-Disposition:
-              description: 파일명. UTF-8 인코딩
-              style: simple
-              schema:
-                example: attachment; filename*=UTF-8''myith-server-export.md
-          content:
-            text/markdown:
-              schema:
-                type: string
-                format: binary
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-        "400":
-          description: INVALID_EXPORT_FORMAT — format이 md/pdf가 아님
+        '202':
+          description: 비동기 접수
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
               example:
-                error:
-                  code: INVALID_EXPORT_FORMAT
-                  message: 지원하지 않는 내보내기 형식입니다. md 또는 pdf만 가능합니다.
-                  requestId: req_01J3ABC
-        "409":
-          description: NO_EXPORTABLE_EXPERIENCE — 내보낼 STAR 기록이 없음
+                data:
+                  requestId: aie_01J3ABC
+        '409':
+          description: QUEST_LOCKED
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error:
-                  code: NO_EXPORTABLE_EXPERIENCE
-                  message: 내보낼 경험 기록이 없습니다. STAR를 먼저 작성해주세요.
-                  requestId: req_01J3ABC
+                error: { code: QUEST_LOCKED, message: "선행 퀘스트를 먼저 완료해주세요.", requestId: req_01J3ABC }
+        '422':
+          description: AI_INPUT_TOO_LONG / AI_SAFETY_REJECTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: { code: AI_INPUT_TOO_LONG, message: "입력이 너무 깁니다. 각 항목을 2000자 이내로 작성해주세요.", requestId: req_01J3ABC }
+        '429':
+          description: AI_RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: { code: AI_RATE_LIMITED, message: "AI 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.", requestId: req_01J3ABC }
+
+  /api/ai-enhancements/{requestId}:
+    get:
+      tags: [Quest]
+      summary: AI 보완 결과 조회
+      operationId: getAiEnhancementResult
+      description: |-
+        POST /api/quests/{questId}/ai-enhancements에서 202 수신 후 프론트가 짧은 간격으로 폴링한다.
+        enhancedStar → 비교 모달 오른쪽 / feedback → 항목별 힌트 / resumeDraft → 자기소개서 초안 영역.
+        서버는 원문을 수정하지 않는다. 사용자가 '적용'을 누르면 프론트가 textarea를 채우고 PUT /star로 저장한다.
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "상태에 따라 PROCESSING / COMPLETED / FAILED"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AiEnhancementResult'
+              examples:
+                PROCESSING:
+                  value:
+                    data:
+                      requestId: aie_01J3ABC
+                      status: PROCESSING
+                COMPLETED:
+                  value:
+                    data:
+                      requestId: aie_01J3ABC
+                      questId: qst_05
+                      status: COMPLETED
+                      enhancedStar:
+                        situation: "4인 팀 프로젝트에서 메인 API 엔드포인트의 평균 응답 시간이 3.2초로 측정되어 사용자 이탈이 증가했다."
+                        task: "2주 내에 응답 시간을 500ms 이하로 줄이는 성능 개선 방안을 수립·적용해야 했다."
+                        action: "JPA N+1 문제를 분석하여 페치 조인과 배치 사이즈 최적화를 적용하고, 반복 조회 데이터에 Redis 캐시를 도입했다."
+                        result: "평균 응답 시간이 3.2초에서 180ms로 94% 감소했고, 이탈률이 15% 개선되었다."
+                      feedback:
+                        - field: action
+                          issue: "'캐시 적용'이 추상적입니다"
+                          suggestion: "어떤 데이터에 어떤 캐시를 적용했는지 구체화하세요"
+                      resumeDraft: "대용량 조회 성능 문제를 캐시 도입으로 해결한 경험이 있습니다. ..."
+                      createdAt: "2026-07-24T03:25:00Z"
+                FAILED:
+                  value:
+                    data:
+                      requestId: aie_01J3ABC
+                      status: FAILED
+                      errorCode: AI_PROVIDER_TIMEOUT
+
+  # ═══════════════════ Dashboard ═══════════════════
   /api/roadmaps/{roadmapId}/dashboard:
     get:
-      tags:
-      - Dashboard
+      tags: [Dashboard]
       summary: 대시보드 조회
+      operationId: getDashboard
       description: |-
         화면 5(대시보드/신화 페이지).
         radar는 배열이다. 축 개수가 직무마다 다르므로 고정 키 객체로 만들지 않는다.
         percent는 단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100이다. 가중평균이 아니다.
-      operationId: getDashboard
       parameters:
-      - name: roadmapId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
+        - name: roadmapId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
       responses:
-        "200":
+        '200':
           description: 조회 성공
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DashboardResponse'
               example:
                 data:
                   character:
-                    nickname: 견습 서버 개발자
+                    nickname: "견습 서버 개발자"
                     jobName: 백엔드 개발자
                     species: deokbaseu
                     stage: 4
@@ -855,567 +1025,932 @@ paths:
                     completedQuestCount: 7
                     level: 4
                   radar:
-                  - axisCode: programming
-                    axisName: 프로그래밍 기초
-                    percent: 67
-                  - axisCode: cs
-                    axisName: CS·자료구조
-                    percent: 80
-                  - axisCode: database
-                    axisName: 데이터입출력
-                    percent: 18
-                  - axisCode: server-api
-                    axisName: 서버·API
-                    percent: 67
-                  - axisCode: collaboration
-                    axisName: 협업·형상관리
-                    percent: 90
-                  - axisCode: deploy
-                    axisName: 배포·운영
-                    percent: 10
+                    - { axisCode: programming, axisName: "프로그래밍 기초", percent: 67 }
+                    - { axisCode: cs, axisName: "CS·자료구조", percent: 80 }
+                    - { axisCode: database, axisName: "데이터입출력", percent: 18 }
+                    - { axisCode: server-api, axisName: "서버·API", percent: 67 }
+                    - { axisCode: collaboration, axisName: "협업·형상관리", percent: 90 }
+                    - { axisCode: deploy, axisName: "배포·운영", percent: 10 }
                   skillTree:
-                  - level: 1
-                    quests:
-                    - questId: qst_01
-                      title: 버전관리로 협업한다
-                      axisCode: collaboration
-                      axisName: 협업·형상관리
-                      status: DONE
+                    - level: 1
+                      quests:
+                        - { questId: qst_01, title: "버전관리로 협업한다", axisCode: collaboration, axisName: "협업·형상관리", status: DONE }
                   experienceCards:
+                    - experienceId: exp_01
+                      questId: qst_02
+                      title: "언어 기초로 토이앱을 만든다"
+                      axisCode: programming
+                      axisName: "프로그래밍 기초"
+                      ncsUnitName: 프로그래밍언어활용
+                      star:
+                        situation: "팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다."
+                        task: "응답 시간을 500ms 이하로 줄여야 했다."
+                        action: "N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다."
+                        result: "평균 응답 시간이 200ms로 감소했다."
+                      createdAt: "2026-07-22T05:00:00Z"
+                  updatedAt: "2026-07-24T03:00:00Z"
+
+  /api/star/records:
+    get:
+      tags: [Dashboard]
+      summary: 경험 카드(STAR 기록) 목록 조회
+      operationId: getRecords
+      description: 화면 5(대시보드) 경험 카드 목록. 커서 기반 페이지네이션(OFFSET 금지).
+      parameters:
+        - { name: cursor, in: query, description: 커서, required: false, schema: { type: string }, example: eyJpZCI6ImV4cF8wMSJ9 }
+        - { name: size, in: query, description: "페이지 크기. 기본 20, 최대 100", required: false, schema: { type: integer, format: int32, default: 20 }, example: 20 }
+        - { name: axis, in: query, description: "축 코드로 필터. 생략 시 전체", required: false, schema: { type: string }, example: programming }
+        - { name: completeness, in: query, description: "완성도 필터. all | complete | partial (기본 all). complete = STAR 4칸 모두 채워짐", required: false, schema: { type: string, default: all, enum: [all, complete, partial] } }
+        - { name: tag, in: query, description: star_record.tags 배열 필터, required: false, schema: { type: string }, example: "리더십" }
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExperienceCard'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+              example:
+                data:
                   - experienceId: exp_01
                     questId: qst_02
-                    title: 언어 기초로 토이앱을 만든다
+                    title: "언어 기초로 토이앱을 만든다"
                     axisCode: programming
-                    axisName: 프로그래밍 기초
+                    axisName: "프로그래밍 기초"
                     ncsUnitName: 프로그래밍언어활용
                     star:
-                      situation: 팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.
-                      task: 응답 시간을 500ms 이하로 줄여야 했다.
-                      action: N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.
-                      result: 평균 응답 시간이 200ms로 감소했다.
-                    createdAt: 2026-07-22T05:00:00Z
-                  updatedAt: 2026-07-24T03:00:00Z
-  /api/quests/{questId}:
+                      situation: "팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다."
+                      task: "응답 시간을 500ms 이하로 줄여야 했다."
+                      action: "N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다."
+                      result: "평균 응답 시간이 200ms로 감소했다."
+                    createdAt: "2026-07-22T05:00:00Z"
+                meta:
+                  nextCursor: eyJpZCI6ImV4cF8wMSJ9
+                  hasNext: true
+
+  /api/roadmaps/{roadmapId}/export:
     get:
-      tags:
-      - Quest
-      summary: 퀘스트 상세 조회
+      tags: [Dashboard]
+      summary: 로드맵 내보내기
+      operationId: export
       description: |-
-        화면 4-2(퀘스트 상세 + STAR).
-        ncsUnit은 source: CUSTOM이면 null이다.
-        certifications는 연계 자격 전부를 내린다. 없으면 빈 배열(프론트가 '해당 없음' 표시).
-        star가 null이면 입력칸을 빈 값으로 시작한다.
-      operationId: getDetail_1
+        format=md: 자소서 생성용 프롬프트 문서 (Content-Type: text/markdown; charset=utf-8).
+        format=pdf: 원본 STAR 열람용 PDF (Content-Type: application/pdf, 한글 폰트 임베딩).
+        대상: 해당 로드맵의 star IS NOT NULL인 경험 카드 전체(완성도 무관).
       parameters:
-      - name: questId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
+        - { name: roadmapId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - name: format
+          in: query
+          description: "내보내기 형식. md(자소서 프롬프트) 또는 pdf(원본 STAR)"
+          required: false
+          schema:
+            type: string
+            default: md
+            enum: [md, pdf]
       responses:
-        "200":
-          description: 조회 성공
+        '200':
+          description: 파일 다운로드
+          headers:
+            Content-Disposition:
+              description: "파일명. UTF-8 인코딩"
+              schema:
+                type: string
+                example: "attachment; filename*=UTF-8''myith-server-export.md"
+          content:
+            text/markdown:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400':
+          description: INVALID_EXPORT_FORMAT — format이 md/pdf가 아님
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                data:
-                  questId: qst_05
-                  roadmapId: rmp_01J3ABC
-                  level: 5
-                  axisCode: cs
-                  axisName: CS·자료구조
-                  title: CS 면접 질문을 정리한다
-                  status: OPEN
-                  source: ACTIVITY
-                  order: 1
-                  version: 0
-                  completionCriteria: 네트워크·OS·DB 핵심 답안을 정리한다
-                  ncsUnit:
-                    code: 2001010701_16v3
-                    name: 응용SW기초기술활용
-                    description: 자료구조와 알고리즘 등 기초 기술을 활용하는 능력
-                  certifications:
-                  - name: 정보처리기사
-                  star: null
-                  starSource: null
-                  updatedAt: 2026-07-24T03:00:00Z
-  /api/jobs:
-    get:
-      tags:
-      - Catalog
-      summary: 직무 목록 조회
+                error: { code: INVALID_EXPORT_FORMAT, message: "지원하지 않는 내보내기 형식입니다. md 또는 pdf만 가능합니다.", requestId: req_01J3ABC }
+        '409':
+          description: NO_EXPORTABLE_EXPERIENCE — 내보낼 STAR 기록이 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: { code: NO_EXPORTABLE_EXPERIENCE, message: "내보낼 경험 기록이 없습니다. STAR를 먼저 작성해주세요.", requestId: req_01J3ABC }
+
+  # ═══════════════════ Desktop ═══════════════════
+  /api/heartbeat:
+    post:
+      tags: [Desktop]
+      summary: 하트비트
+      operationId: heartbeat
       description: |-
-        화면 2(캐릭터 생성) 직무 카드 목록에 사용한다.
-        available: false는 job_profile이 아직 없는 직무. 프론트가 '준비중' 잠긴 카드로 표시한다.
-        keywords는 job_profile 분야 축 상위 5개. 프로필이 없으면 빈 배열이다(null 아님).
-      operationId: getJobs
+        Electron 상주 앱 전용이다. 웹 프론트는 호출하지 않는다.
+        서버는 마지막 실제 서비스 활동 시각 기준으로 48시간 미접속을 판정해 nudge: true로 응답한다.
+        heartbeat 자체는 활동 시각을 갱신하지 않는다(갱신하면 48시간이 영원히 지나지 않는다).
+        캐릭터가 없으면 characterState: null.
       responses:
-        "200":
-          description: 조회 성공
+        '200':
+          description: 응답
           content:
             application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/HeartbeatResponse'
               example:
                 data:
-                  categories:
-                  - categoryCode: it
-                    categoryName: IT·개발
-                    sortOrder: 1
-                    jobs:
-                    - jobCode: server
-                      jobName: 백엔드 개발자
-                      tagline: "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다."
-                      keywords:
-                      - 프로그래밍 기초
-                      - CS·자료구조
-                      - 데이터입출력
-                      - 서버·API
-                      - 협업·형상관리
-                      - 배포·운영
-                      available: true
-                    - jobCode: android
-                      jobName: 안드로이드 개발자
-                      tagline: 안드로이드 환경에서 동작하는 애플리케이션을 구현합니다.
-                      keywords: []
-                      available: false
-  /api/jobs/{jobCode}/diagnosis:
-    get:
-      tags:
-      - Catalog
-      summary: 자가진단 문항 조회
-      description: |-
-        화면 3(자가진단) 문항 목록을 반환한다.
-        문항 개수는 직무마다 다르다(6~10개). 배열 길이를 고정하지 않는다.
-        levels는 4단계 고정이다. mastery는 참고용이며 프론트는 id만 서버로 보낸다.
-        profileVersion은 프론트가 보관했다가 POST /api/roadmaps 요청에 그대로 실어 보낸다.
-      operationId: getDiagnosis
-      parameters:
-      - name: jobCode
-        in: path
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: 조회 성공
-          content:
-            application/json:
-              example:
-                data:
-                  jobCode: server
-                  profileVersion: 1
-                  questions:
-                  - skillCode: git
-                    text: 버전관리로 협업한다
-                    axisCode: collaboration
-                    axisName: 협업·형상관리
-                    sortOrder: 1
-                  - skillCode: rest
-                    text: REST API 서버를 구현한다
-                    axisCode: server-api
-                    axisName: 서버·API
-                    sortOrder: 6
-                  levels:
-                  - id: unknown
-                    label: 모름
-                    mastery: 0
-                  - id: heard
-                    label: 들어봄
-                    mastery: 0.33
-                  - id: tried
-                    label: 해봄
-                    mastery: 0.66
-                  - id: independent
-                    label: 혼자 가능
-                    mastery: 1.0
-        "404":
-          description: JOB_PROFILE_NOT_READY — 해당 직무의 job_profile 미생성
-          content:
-            application/json:
-              example:
-                error:
-                  code: JOB_PROFILE_NOT_READY
-                  message: 해당 직무의 프로필이 아직 준비되지 않았습니다.
-                  requestId: req_01J3ABC
+                  nudge: true
+                  characterState:
+                    species: deokbaseu
+                    stage: 4
+                    completionRate: 80
+
+  # ═══════════════════ Ops ═══════════════════
   /api/health:
     get:
-      tags:
-      - Ops
+      tags: [Ops]
       summary: 헬스체크
+      operationId: health
       description: |-
         서버 상태를 확인한다.
         이 엔드포인트는 data 래퍼를 사용하지 않는 유일한 엔드포인트다.
         모니터링 도구(AWS ALB, k8s probe 등) 호환을 위해 래퍼 없이 평문 JSON을 반환한다.
-      operationId: health
+      security: []
       responses:
-        "200":
+        '200':
           description: 서버 정상
           content:
             application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
                 version: 0.1.0
-                time: 2026-07-24T03:00:00Z
-      security: []
-  /api/characters:
-    get:
-      tags:
-      - Roadmap
-      summary: 캐릭터 목록 조회
-      description: |-
-        화면 1-1(알 선택, 캐릭터 없을 때)과 1-2(홈, 캐릭터 있을 때) 모두에 사용한다.
-        프론트는 응답의 species 목록으로 알 선택 화면에서 보유 종류를 제외한다.
-        nextQuest가 null이면 모든 퀘스트 완료 상태다.
-        사이드바 카드와 홈 화면 카드가 함께 쓴다.
-        status=archived로 아카이브된 로드맵을 조회한다(경험 카드 열람용).
-      operationId: getCharacters
-      parameters:
-      - name: status
-        in: query
-        description: active | archived | all (기본 active)
-        required: false
-        schema:
-          type: string
-          enum:
-          - active
-          - archived
-          - all
-        example: active
-      responses:
-        "200":
-          description: 조회 성공
-          content:
-            application/json:
-              example:
-                data:
-                - characterId: chr_01J3ABC
-                  roadmapId: rmp_01J3ABC
-                  species: deokbaseu
-                  nickname: 견습 서버 개발자
-                  jobCode: server
-                  jobName: 백엔드 개발자
-                  tagline: "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다."
-                  roadmapStatus: ACTIVE
-                  completionRate: 80
-                  stage: 4
-                  stageLabel: 완성
-                  level: 4
-                  nextQuest:
-                    questId: qst_01J3ABC
-                    title: REST API 서버를 구현한다
-                  createdAt: 2026-07-20T02:00:00Z
-                  updatedAt: 2026-07-24T03:00:00Z
-  /api/ai-enhancements/{requestId}:
-    get:
-      tags:
-      - Quest
-      summary: AI 보완 결과 조회
-      description: |-
-        POST /api/quests/{questId}/ai-enhancements에서 202 수신 후 프론트가 짧은 간격으로 폴링한다.
-        enhancedStar → 비교 모달 오른쪽 / feedback → 항목별 힌트 / resumeDraft → 자기소개서 초안 영역.
-        서버는 원문을 수정하지 않는다. 사용자가 '적용'을 누르면 프론트가 textarea를 채우고 PUT /star로 저장한다.
-      operationId: getResult
-      parameters:
-      - name: requestId
-        in: path
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: 실패
-          content:
-            application/json:
-              examples:
-                FAILED:
-                  description: FAILED
-                  value:
-                    data:
-                      requestId: aie_01J3ABC
-                      status: FAILED
-                      errorCode: AI_PROVIDER_TIMEOUT
-  /api/roadmaps/{roadmapId}/quests/{questId}:
-    delete:
-      tags:
-      - Roadmap
-      summary: 퀘스트 삭제
-      description: source가 CUSTOM인 사용자 정의 퀘스트만 삭제할 수 있다.
-      operationId: deleteQuest
-      parameters:
-      - name: roadmapId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - name: questId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "204":
-          description: 삭제 성공
-        "403":
-          description: CUSTOM_QUEST_ONLY — 사용자 정의 퀘스트가 아닌데 삭제 시도
-          content:
-            application/json:
-              example:
-                error:
-                  code: CUSTOM_QUEST_ONLY
-                  message: 사용자 정의 퀘스트만 삭제할 수 있습니다.
-                  requestId: req_01J3ABC
+                time: "2026-07-24T03:00:00Z"
+
+# ══════════════════════════════════════════════════
+# COMPONENTS
+# ══════════════════════════════════════════════════
 components:
-  schemas:
-    SaveStarRequest:
-      type: object
-      properties:
-        star:
-          $ref: "#/components/schemas/StarInput"
-          description: STAR 기록. 각 필드 trim 후 0~2000자. 임시 저장이므로 빈 값 허용
-        source:
-          type: string
-          description: 출처. manual | ai-assisted
-          enum:
-          - manual
-          - ai-assisted
-          example: manual
-        aiEnhancementId:
-          type: string
-          description: AI 보완을 적용한 경우 해당 요청 ID
-          example: null
-    StarInput:
-      type: object
-      properties:
-        situation:
-          type: string
-          description: 상황(S)
-          example: 팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.
-          maxLength: 2000
-          minLength: 0
-        task:
-          type: string
-          description: 과제(T)
-          example: 응답 시간을 500ms 이하로 줄여야 했다.
-          maxLength: 2000
-          minLength: 0
-        action:
-          type: string
-          description: 행동(A)
-          example: N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.
-          maxLength: 2000
-          minLength: 0
-        result:
-          type: string
-          description: 결과(R)
-          example: 평균 응답 시간이 200ms로 감소했다.
-          maxLength: 2000
-          minLength: 0
-    PresignRequest:
-      type: object
-      properties:
-        fileName:
-          type: string
-          description: 업로드할 파일 이름
-          example: portfolio.pdf
-        contentType:
-          type: string
-          description: "MIME 타입. application/pdf, image/png, image/jpeg만 허용"
-          example: application/pdf
-      required:
-      - contentType
-      - fileName
-    AnswerRequest:
-      type: object
-      properties:
-        skillCode:
-          type: string
-          description: 스킬 코드
-          example: git
-        level:
-          type: string
-          description: 자가진단 수준. unknown|heard|tried|independent
-          enum:
-          - unknown
-          - heard
-          - tried
-          - independent
-          example: tried
-      required:
-      - level
-      - skillCode
-    CreateRoadmapRequest:
-      type: object
-      properties:
-        jobCode:
-          type: string
-          description: "직무 코드. GET /api/jobs에서 available: true인 것만 가능"
-          example: server
-        profileVersion:
-          type: integer
-          format: int32
-          description: "GET /api/jobs/{jobCode}/diagnosis에서 받은 프로필 버전"
-          example: 1
-        species:
-          type: string
-          description: 캐릭터 종류. 프론트 assets 22종 중 택 1. enum이 아닌 문자열
-          example: deokbaseu
-        nickname:
-          type: string
-          description: 캐릭터 닉네임. trim 후 1~20자
-          example: 견습 서버 개발자
-          maxLength: 20
-          minLength: 1
-        answers:
-          type: array
-          description: 자가진단 응답 목록. 모든 필수 문항에 대해 응답해야 한다
-          items:
-            $ref: "#/components/schemas/AnswerRequest"
-        narrative:
-          $ref: "#/components/schemas/NarrativeRequest"
-          description: 서술형 입력. 하나라도 있으면 202 비동기 분석
-        repoUrl:
-          type: string
-          description: GitHub 저장소 URL (optional)
-          example: https://github.com/user/community
-        fileKey:
-          type: string
-          description: POST /api/uploads/presign에서 받은 파일 키 (optional)
-          example: portfolio/usr_01J3ABC/9f2c1d.pdf
-      required:
-      - answers
-      - jobCode
-      - profileVersion
-      - species
-    NarrativeRequest:
-      type: object
-      properties:
-        experience:
-          type: string
-          description: 경험 서술
-          example: 스프링으로 커뮤니티 CRUD를 만들어봤습니다.
-        strength:
-          type: string
-          description: 강점 서술
-          example: Java와 Spring이 가장 익숙합니다.
-        difficulty:
-          type: string
-          description: 어려움 서술
-          example: 성능 최적화는 아직 해본 적이 없습니다.
-    AddQuestRequest:
-      type: object
-      properties:
-        title:
-          type: string
-          description: 퀘스트 제목. 1~80자
-          example: 사이드 프로젝트를 운영한다
-          maxLength: 80
-          minLength: 1
-        axisCode:
-          type: string
-          description: 역량 축 코드
-          example: server-api
-        level:
-          type: integer
-          format: int32
-          description: 레벨. 해당 로드맵의 레벨 범위 내
-          example: 3
-      required:
-      - axisCode
-      - level
-      - title
-    AiEnhancementRequest:
-      type: object
-      properties:
-        star:
-          $ref: "#/components/schemas/StarInput"
-          description: AI 보완 대상 STAR 원문
-        locale:
-          type: string
-          description: 로케일
-          example: ko-KR
-        style:
-          type: string
-          description: 문체 스타일
-          example: concise-professional
-    RefreshRequest:
-      type: object
-      properties:
-        refreshToken:
-          type: string
-          description: 리프레시 토큰
-          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.xyz
-      required:
-      - refreshToken
-    GoogleLoginRequest:
-      type: object
-      properties:
-        idToken:
-          type: string
-          description: Google에서 받은 ID Token
-          example: eyJhbGciOiJSUzI1NiIs...
-      required:
-      - idToken
-    UpdateMeRequest:
-      type: object
-      properties:
-        nickname:
-          type: string
-          description: 변경할 닉네임. trim 후 1~20자
-          example: 새이름
-          maxLength: 20
-          minLength: 1
-        profileImageUrl:
-          type: string
-          description: 변경할 프로필 이미지 URL
-          example: https://example.com/avatar.png
-    ReorderRequest:
-      type: object
-      properties:
-        questId:
-          type: integer
-          format: int64
-          description: 이동할 퀘스트 ID (서버 내부 ID)
-          example: 2
-        targetLevel:
-          type: integer
-          format: int32
-          description: 이동 대상 레벨
-          example: 1
-        targetIndex:
-          type: integer
-          format: int32
-          description: 이동 대상 인덱스 (0부터)
-          example: 0
-        version:
-          type: integer
-          format: int64
-          description: 낙관적 락 버전
-          example: 3
-      required:
-      - questId
-      - targetIndex
-      - targetLevel
-      - version
-    CompleteRequest:
-      type: object
-      properties:
-        completed:
-          type: boolean
-          description: "true: 완료 / false: 완료 취소"
-          example: true
-        version:
-          type: integer
-          format: int64
-          description: "낙관적 락 버전. GET /api/roadmaps/{id} 또는 GET /api/quests/{id}에서\
-            \ 받은 version"
-          example: 3
-      required:
-      - completed
-      - version
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  schemas:
+    # ── Enums ──
+    QuestStatus:
+      type: string
+      enum: [LOCKED, OPEN, PENDING, DONE, ALREADY_KNOWN]
+    QuestSource:
+      type: string
+      enum: [SKILL, ACTIVITY, CUSTOM]
+    StarSource:
+      type: string
+      enum: [manual, ai-assisted]
+    GenerationState:
+      type: string
+      enum: [PENDING, ANALYZING, READY, FAILED]
+    RoadmapStatus:
+      type: string
+      enum: [ACTIVE, ARCHIVED]
+    ExportFormat:
+      type: string
+      enum: [md, pdf]
+    AiRequestStatus:
+      type: string
+      enum: [PROCESSING, COMPLETED, FAILED]
+
+    # ── Common ──
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+    ErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          example: QUEST_LOCKED
+        message:
+          type: string
+          example: "선행 퀘스트를 먼저 완료해주세요."
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        requestId:
+          type: string
+          example: req_01J3ABC
+    Meta:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+        hasNext:
+          type: boolean
+        retryAfterSeconds:
+          type: integer
+          nullable: true
+
+    # ── Shared building blocks ──
+    AxisItem:
+      type: object
+      properties:
+        axisCode:
+          type: string
+          description: "역량 축 코드. enum이 아닌 자유 문자열"
+        axisName:
+          type: string
+        percent:
+          type: integer
+          description: "단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100"
+      required: [axisCode, axisName, percent]
+
+    StarInput:
+      type: object
+      properties:
+        situation:
+          type: string
+          maxLength: 2000
+        task:
+          type: string
+          maxLength: 2000
+        action:
+          type: string
+          maxLength: 2000
+        result:
+          type: string
+          maxLength: 2000
+
+    NextQuest:
+      type: object
+      nullable: true
+      properties:
+        questId:
+          type: string
+        title:
+          type: string
+
+    QuestItem:
+      type: object
+      properties:
+        questId:
+          type: string
+        title:
+          type: string
+        axisCode:
+          type: string
+        axisName:
+          type: string
+        status:
+          $ref: '#/components/schemas/QuestStatus'
+        source:
+          $ref: '#/components/schemas/QuestSource'
+        order:
+          type: integer
+        version:
+          type: integer
+          format: int64
+        level:
+          type: integer
+      required: [questId, title, axisCode, axisName, status, source, order, version]
+
+    LevelGroup:
+      type: object
+      properties:
+        level:
+          type: integer
+        quests:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestItem'
+      required: [level, quests]
+
+    NcsUnit:
+      type: object
+      nullable: true
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    CertItem:
+      type: object
+      properties:
+        name:
+          type: string
+
+    FeedbackEntry:
+      type: object
+      properties:
+        field:
+          type: string
+          enum: [situation, task, action, result]
+        issue:
+          type: string
+        suggestion:
+          type: string
+
+    ExperienceCard:
+      type: object
+      properties:
+        experienceId:
+          type: string
+        questId:
+          type: string
+        title:
+          type: string
+        axisCode:
+          type: string
+        axisName:
+          type: string
+        ncsUnitName:
+          type: string
+          nullable: true
+        star:
+          $ref: '#/components/schemas/StarInput'
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Auth ──
+    GoogleLoginRequest:
+      type: object
+      required: [idToken]
+      properties:
+        idToken:
+          type: string
+    GoogleLoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        isNewUser:
+          type: boolean
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        nickname:
+          type: string
+        profileImageUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    UpdateMeRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 20
+        profileImageUrl:
+          type: string
+          nullable: true
+
+    # ── Upload ──
+    PresignRequest:
+      type: object
+      required: [fileName, contentType]
+      properties:
+        fileName:
+          type: string
+        contentType:
+          type: string
+    PresignResponse:
+      type: object
+      properties:
+        uploadUrl:
+          type: string
+        fileKey:
+          type: string
+        expiresIn:
+          type: integer
+
+    # ── Catalog ──
+    JobListResponse:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    Category:
+      type: object
+      properties:
+        categoryCode:
+          type: string
+        categoryName:
+          type: string
+        sortOrder:
+          type: integer
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobItem'
+    JobItem:
+      type: object
+      properties:
+        jobCode:
+          type: string
+          description: "직무 코드. enum이 아닌 자유 문자열"
+        jobName:
+          type: string
+        tagline:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+          description: "job_profile 분야 축 상위 5개. 프로필 없으면 빈 배열"
+        available:
+          type: boolean
+    DiagnosisResponse:
+      type: object
+      properties:
+        jobCode:
+          type: string
+        profileVersion:
+          type: integer
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiagnosisQuestion'
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiagnosisLevel'
+    DiagnosisQuestion:
+      type: object
+      properties:
+        skillCode:
+          type: string
+        text:
+          type: string
+        axisCode:
+          type: string
+        axisName:
+          type: string
+        sortOrder:
+          type: integer
+    DiagnosisLevel:
+      type: object
+      properties:
+        id:
+          type: string
+          enum: [unknown, heard, tried, independent]
+        label:
+          type: string
+        mastery:
+          type: number
+
+    # ── Roadmap ──
+    CharacterSummary:
+      type: object
+      properties:
+        characterId:
+          type: string
+        roadmapId:
+          type: string
+        species:
+          type: string
+          description: "캐릭터 종류. enum이 아닌 자유 문자열"
+        nickname:
+          type: string
+        jobCode:
+          type: string
+          description: "직무 코드. enum이 아닌 자유 문자열"
+        jobName:
+          type: string
+        tagline:
+          type: string
+        roadmapStatus:
+          $ref: '#/components/schemas/RoadmapStatus'
+        completionRate:
+          type: integer
+        stage:
+          type: integer
+          minimum: 1
+          maximum: 4
+        stageLabel:
+          type: string
+          enum: [시작, 성장, 숙련, 완성]
+        level:
+          type: integer
+        nextQuest:
+          $ref: '#/components/schemas/NextQuest'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateRoadmapRequest:
+      type: object
+      required: [jobCode, profileVersion, species, answers]
+      properties:
+        jobCode:
+          type: string
+        profileVersion:
+          type: integer
+        species:
+          type: string
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 20
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnswerRequest'
+        narrative:
+          $ref: '#/components/schemas/NarrativeRequest'
+        repoUrl:
+          type: string
+          nullable: true
+        fileKey:
+          type: string
+          nullable: true
+    AnswerRequest:
+      type: object
+      required: [skillCode, level]
+      properties:
+        skillCode:
+          type: string
+        level:
+          type: string
+          enum: [unknown, heard, tried, independent]
+    NarrativeRequest:
+      type: object
+      properties:
+        experience:
+          type: string
+        strength:
+          type: string
+        difficulty:
+          type: string
+    CreateRoadmapResponse:
+      type: object
+      properties:
+        roadmapId:
+          type: string
+        generationState:
+          $ref: '#/components/schemas/GenerationState'
+
+    RoadmapDetail:
+      type: object
+      properties:
+        roadmapId:
+          type: string
+        generationState:
+          $ref: '#/components/schemas/GenerationState'
+        roadmapStatus:
+          $ref: '#/components/schemas/RoadmapStatus'
+        jobCode:
+          type: string
+        jobName:
+          type: string
+        tagline:
+          type: string
+        character:
+          $ref: '#/components/schemas/RoadmapCharacter'
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/LevelGroup'
+        updatedAt:
+          type: string
+          format: date-time
+    RoadmapCharacter:
+      type: object
+      properties:
+        characterId:
+          type: string
+        species:
+          type: string
+        nickname:
+          type: string
+        stage:
+          type: integer
+          minimum: 1
+          maximum: 4
+        stageLabel:
+          type: string
+          enum: [시작, 성장, 숙련, 완성]
+        completionRate:
+          type: integer
+
+    AddQuestRequest:
+      type: object
+      required: [title, axisCode, level]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 80
+        axisCode:
+          type: string
+        level:
+          type: integer
+    ReorderRequest:
+      type: object
+      required: [questId, targetLevel, targetIndex, version]
+      properties:
+        questId:
+          type: integer
+          format: int64
+        targetLevel:
+          type: integer
+        targetIndex:
+          type: integer
+        version:
+          type: integer
+          format: int64
+
+    # ── Quest ──
+    QuestDetail:
+      type: object
+      properties:
+        questId:
+          type: string
+        roadmapId:
+          type: string
+        level:
+          type: integer
+        axisCode:
+          type: string
+        axisName:
+          type: string
+        title:
+          type: string
+        status:
+          $ref: '#/components/schemas/QuestStatus'
+        source:
+          $ref: '#/components/schemas/QuestSource'
+        order:
+          type: integer
+        version:
+          type: integer
+          format: int64
+        completionCriteria:
+          type: string
+          nullable: true
+        ncsUnit:
+          $ref: '#/components/schemas/NcsUnit'
+        certifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/CertItem'
+        star:
+          $ref: '#/components/schemas/StarInput'
+          nullable: true
+        starSource:
+          $ref: '#/components/schemas/StarSource'
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+
+    SaveStarRequest:
+      type: object
+      properties:
+        star:
+          $ref: '#/components/schemas/StarInput'
+        source:
+          $ref: '#/components/schemas/StarSource'
+        aiEnhancementId:
+          type: string
+          nullable: true
+    SaveStarResponse:
+      type: object
+      properties:
+        questId:
+          type: string
+        star:
+          $ref: '#/components/schemas/StarInput'
+        source:
+          $ref: '#/components/schemas/StarSource'
+        status:
+          $ref: '#/components/schemas/QuestStatus'
+        updatedAt:
+          type: string
+          format: date-time
+
+    CompleteRequest:
+      type: object
+      required: [completed, version]
+      properties:
+        completed:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+    CompleteResponse:
+      type: object
+      properties:
+        quest:
+          type: object
+          properties:
+            questId:
+              type: string
+            status:
+              $ref: '#/components/schemas/QuestStatus'
+            completedAt:
+              type: string
+              format: date-time
+            version:
+              type: integer
+              format: int64
+        characterChanges:
+          type: object
+          properties:
+            completionRate:
+              type: integer
+            stage:
+              type: integer
+              minimum: 1
+              maximum: 4
+            stageLabel:
+              type: string
+              enum: [시작, 성장, 숙련, 완성]
+            level:
+              type: integer
+            nextQuest:
+              $ref: '#/components/schemas/NextQuest'
+        unlockedQuestIds:
+          type: array
+          items:
+            type: string
+        radar:
+          type: array
+          items:
+            $ref: '#/components/schemas/AxisItem'
+
+    AiEnhancementRequest:
+      type: object
+      properties:
+        star:
+          $ref: '#/components/schemas/StarInput'
+        locale:
+          type: string
+        style:
+          type: string
+    AiEnhancementResult:
+      type: object
+      properties:
+        requestId:
+          type: string
+        questId:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/AiRequestStatus'
+        enhancedStar:
+          $ref: '#/components/schemas/StarInput'
+          nullable: true
+        feedback:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/FeedbackEntry'
+        resumeDraft:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [requestId, status]
+
+    # ── Dashboard ──
+    DashboardResponse:
+      type: object
+      properties:
+        character:
+          $ref: '#/components/schemas/DashboardCharacter'
+        radar:
+          type: array
+          items:
+            $ref: '#/components/schemas/AxisItem'
+        skillTree:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillTreeLevel'
+        experienceCards:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceCard'
+        updatedAt:
+          type: string
+          format: date-time
+    DashboardCharacter:
+      type: object
+      properties:
+        nickname:
+          type: string
+        jobName:
+          type: string
+        species:
+          type: string
+        stage:
+          type: integer
+          minimum: 1
+          maximum: 4
+        stageLabel:
+          type: string
+          enum: [시작, 성장, 숙련, 완성]
+        completionRate:
+          type: integer
+        completedQuestCount:
+          type: integer
+        level:
+          type: integer
+    SkillTreeLevel:
+      type: object
+      properties:
+        level:
+          type: integer
+        quests:
+          type: array
+          items:
+            type: object
+            properties:
+              questId:
+                type: string
+              title:
+                type: string
+              axisCode:
+                type: string
+              axisName:
+                type: string
+              status:
+                $ref: '#/components/schemas/QuestStatus'
+
+    # ── Desktop ──
+    HeartbeatResponse:
+      type: object
+      properties:
+        nudge:
+          type: boolean
+        characterState:
+          type: object
+          nullable: true
+          properties:
+            species:
+              type: string
+            stage:
+              type: integer
+              minimum: 1
+              maximum: 4
+            completionRate:
+              type: integer
+
+    # ── Ops ──
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        time:
+          type: string
+          format: date-time
