@@ -2,6 +2,7 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.auth.UserService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
 import com.myith.core.domain.user.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -26,18 +27,7 @@ public class UserController {
     }
 
     @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자의 프로필 정보를 반환한다.")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": {
-                                "id": "usr_01J3ABC",
-                                "email": "sungyoon@example.com",
-                                "nickname": "이성윤",
-                                "profileImageUrl": null,
-                                "createdAt": "2026-07-01T00:00:00Z"
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal Long userId) {
         User user = userService.getMe(userId);
@@ -46,20 +36,10 @@ public class UserController {
 
     @Operation(summary = "내 정보 수정", description = "닉네임 또는 프로필 이미지를 변경한다. 모든 필드는 optional이다.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "id": "usr_01J3ABC",
-                                        "email": "sungyoon@example.com",
-                                        "nickname": "새이름",
-                                        "profileImageUrl": null,
-                                        "createdAt": "2026-07-01T00:00:00Z"
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "VALIDATION_ERROR — nickname trim 후 1~20자",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {

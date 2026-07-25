@@ -5,8 +5,6 @@ import com.myith.core.common.ApiResponse;
 import com.myith.core.common.Meta;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -30,32 +28,7 @@ public class StarController {
             summary = "경험 카드(STAR 기록) 목록 조회",
             description = "화면 5(대시보드) 경험 카드 목록. 커서 기반 페이지네이션(OFFSET 금지)."
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": [
-                                {
-                                  "experienceId": "exp_01",
-                                  "questId": "qst_02",
-                                  "title": "언어 기초로 토이앱을 만든다",
-                                  "axisCode": "programming",
-                                  "axisName": "프로그래밍 기초",
-                                  "ncsUnitName": "프로그래밍언어활용",
-                                  "star": {
-                                    "situation": "팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.",
-                                    "task": "응답 시간을 500ms 이하로 줄여야 했다.",
-                                    "action": "N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.",
-                                    "result": "평균 응답 시간이 200ms로 감소했다."
-                                  },
-                                  "createdAt": "2026-07-22T05:00:00Z"
-                                }
-                              ],
-                              "meta": {
-                                "nextCursor": "eyJpZCI6ImV4cF8wMSJ9",
-                                "hasNext": true
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/records")
     public ResponseEntity<ApiResponse<List<ExperienceCardResponse>>> getRecords(
             @AuthenticationPrincipal Long userId,

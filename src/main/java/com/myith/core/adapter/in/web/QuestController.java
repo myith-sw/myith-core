@@ -2,6 +2,8 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.quest.QuestDetailService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
+import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -40,40 +42,12 @@ public class QuestController {
                     certifications는 연계 자격 전부를 내린다. 없으면 빈 배열(프론트가 '해당 없음' 표시).
                     star가 null이면 입력칸을 빈 값으로 시작한다."""
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": {
-                                "questId": "qst_05",
-                                "roadmapId": "rmp_01J3ABC",
-                                "level": 5,
-                                "axisCode": "cs",
-                                "axisName": "CS·자료구조",
-                                "title": "CS 면접 질문을 정리한다",
-                                "status": "OPEN",
-                                "source": "ACTIVITY",
-                                "order": 1,
-                                "version": 0,
-                                "completionCriteria": "네트워크·OS·DB 핵심 답안을 정리한다",
-                                "ncsUnit": {
-                                  "code": "2001010701_16v3",
-                                  "name": "응용SW기초기술활용",
-                                  "description": "자료구조와 알고리즘 등 기초 기술을 활용하는 능력"
-                                },
-                                "certifications": [
-                                  { "name": "정보처리기사" }
-                                ],
-                                "star": null,
-                                "starSource": null,
-                                "updatedAt": "2026-07-24T03:00:00Z"
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/{questId}")
     public ResponseEntity<ApiResponse<QuestDetailResponse>> getDetail(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId) {
-        QuestDetailService.QuestDetailDto dto = questDetailService.getDetail(userId, questId);
+            @PathVariable String questId) {
+        QuestDetailService.QuestDetailDto dto = questDetailService.getDetail(userId, IdCodec.decode(questId));
         QuestDetailResponse response = new QuestDetailResponse(
                 "qst_" + dto.questId(), "rmp_01J3ABC", dto.level(),
                 "cs", dto.axisName(), dto.title(), dto.status(), "ACTIVITY", 1, 0,
@@ -103,25 +77,10 @@ public class QuestController {
                     AI 제안을 적용해 저장한 경우 source: "ai-assisted" + aiEnhancementId를 채운다."""
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "questId": "qst_05",
-                                        "star": {
-                                          "situation": "팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.",
-                                          "task": "응답 시간을 500ms 이하로 줄여야 했다.",
-                                          "action": "N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.",
-                                          "result": "평균 응답 시간이 200ms로 감소했다."
-                                        },
-                                        "source": "manual",
-                                        "status": "PENDING",
-                                        "updatedAt": "2026-07-24T03:10:00Z"
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED — 잠긴 퀘스트에 쓰기 시도",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -134,13 +93,13 @@ public class QuestController {
     @PutMapping("/{questId}/star")
     public ResponseEntity<ApiResponse<SaveStarResponse>> saveStar(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId,
+            @PathVariable String questId,
             @RequestBody SaveStarRequest request) {
-        questDetailService.saveStar(userId, questId,
+        questDetailService.saveStar(userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
         return ResponseEntity.ok(ApiResponse.of(new SaveStarResponse(
-                "qst_" + questId, request.star(),
+                questId, request.star(),
                 request.source() != null ? request.source() : "manual",
                 "PENDING", null
         )));
@@ -159,40 +118,10 @@ public class QuestController {
                     schema = @Schema(type = "string"))
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "완료 처리 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "quest": {
-                                          "questId": "qst_05",
-                                          "status": "DONE",
-                                          "completedAt": "2026-07-24T03:20:00Z",
-                                          "version": 4
-                                        },
-                                        "characterChanges": {
-                                          "completionRate": 84,
-                                          "stage": 4,
-                                          "stageLabel": "완성",
-                                          "level": 5,
-                                          "nextQuest": {
-                                            "questId": "qst_06",
-                                            "title": "테스트 코드를 작성한다"
-                                          }
-                                        },
-                                        "unlockedQuestIds": ["qst_07"],
-                                        "radar": [
-                                          { "axisCode": "programming", "axisName": "프로그래밍 기초", "percent": 72 },
-                                          { "axisCode": "cs", "axisName": "CS·자료구조", "percent": 80 },
-                                          { "axisCode": "database", "axisName": "데이터입출력", "percent": 18 },
-                                          { "axisCode": "server-api", "axisName": "서버·API", "percent": 67 },
-                                          { "axisCode": "collaboration", "axisName": "협업·형상관리", "percent": 90 },
-                                          { "axisCode": "deploy", "axisName": "배포·운영", "percent": 10 }
-                                        ]
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "완료 처리 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "VERSION_CONFLICT / QUEST_LOCKED",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = {
                                     @ExampleObject(name = "VERSION_CONFLICT", value = """
                                             {
@@ -215,10 +144,10 @@ public class QuestController {
     @PatchMapping("/{questId}/complete")
     public ResponseEntity<ApiResponse<CompleteResponse>> toggleComplete(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId,
+            @PathVariable String questId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CompleteRequest request) {
-        questDetailService.toggleComplete(userId, questId, request.completed(), request.version());
+        questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version());
         // 실제 구현에서는 스냅샷에서 characterChanges, radar 등을 가져와 반환한다.
         // 문서화 목적이므로 구조만 정의한다.
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -234,16 +163,10 @@ public class QuestController {
                     202 수신 후 프론트가 GET /api/ai-enhancements/{requestId}를 짧은 간격으로 폴링한다."""
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "비동기 접수",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "requestId": "aie_01J3ABC"
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "비동기 접수"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -254,6 +177,7 @@ public class QuestController {
                                     }"""))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "AI_INPUT_TOO_LONG / AI_SAFETY_REJECTED",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -264,6 +188,7 @@ public class QuestController {
                                     }"""))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "AI_RATE_LIMITED",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -273,10 +198,11 @@ public class QuestController {
                                       }
                                     }""")))
     })
+    @ResponseStatus(HttpStatus.ACCEPTED)
     @PostMapping("/{questId}/ai-enhancements")
     public ResponseEntity<ApiResponse<AiEnhancementAcceptedResponse>> requestAiEnhancement(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long questId,
+            @PathVariable String questId,
             @Valid @RequestBody AiEnhancementRequest request) {
         // 미구현 — Outbox 발행 후 requestId를 반환
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
@@ -301,8 +227,8 @@ public class QuestController {
             @Schema(description = "화면 4-2 '완료 기준' 박스", example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
             @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스. source: CUSTOM이면 null") NcsUnitResponse ncsUnit,
             @Schema(description = "화면 4-2 '추천 자격'. 빈 배열이면 '해당 없음'") List<CertResponse> certifications,
-            @Schema(description = "화면 4-2 STAR 입력칸 4개 초기값. null이면 빈 값으로 시작") StarResponse star,
-            @Schema(description = "STAR 출처. manual | ai-assisted", example = "null") String starSource,
+            @Schema(description = "화면 4-2 STAR 입력칸 4개 초기값. null이면 빈 값으로 시작", nullable = true) StarResponse star,
+            @Schema(description = "STAR 출처. manual | ai-assisted", nullable = true) String starSource,
             @Schema(description = "최근 수정일", example = "2026-07-24T03:00:00Z") String updatedAt
     ) {}
 

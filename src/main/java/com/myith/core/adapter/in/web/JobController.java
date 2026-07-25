@@ -2,6 +2,7 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.roadmap.JobQueryService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -35,36 +36,7 @@ public class JobController {
                     available: false는 job_profile이 아직 없는 직무. 프론트가 '준비중' 잠긴 카드로 표시한다.
                     keywords는 job_profile 분야 축 상위 5개. 프로필이 없으면 빈 배열이다(null 아님)."""
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": {
-                                "categories": [
-                                  {
-                                    "categoryCode": "it",
-                                    "categoryName": "IT·개발",
-                                    "sortOrder": 1,
-                                    "jobs": [
-                                      {
-                                        "jobCode": "server",
-                                        "jobName": "백엔드 개발자",
-                                        "tagline": "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다.",
-                                        "keywords": ["프로그래밍 기초","CS·자료구조","데이터입출력","서버·API","협업·형상관리"],
-                                        "available": true
-                                      },
-                                      {
-                                        "jobCode": "android",
-                                        "jobName": "안드로이드 개발자",
-                                        "tagline": "안드로이드 환경에서 동작하는 애플리케이션을 구현합니다.",
-                                        "keywords": [],
-                                        "available": false
-                                      }
-                                    ]
-                                  }
-                                ]
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping
     public ResponseEntity<ApiResponse<JobListResponse>> getJobs() {
         List<JobQueryService.CategoryDto> categories = jobQueryService.getJobList();
@@ -87,39 +59,10 @@ public class JobController {
                     profileVersion은 프론트가 보관했다가 POST /api/roadmaps 요청에 그대로 실어 보낸다."""
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "jobCode": "server",
-                                        "profileVersion": 1,
-                                        "questions": [
-                                          {
-                                            "skillCode": "git",
-                                            "text": "버전관리로 협업한다",
-                                            "axisCode": "collaboration",
-                                            "axisName": "협업·형상관리",
-                                            "sortOrder": 1
-                                          },
-                                          {
-                                            "skillCode": "rest",
-                                            "text": "REST API 서버를 구현한다",
-                                            "axisCode": "server-api",
-                                            "axisName": "서버·API",
-                                            "sortOrder": 6
-                                          }
-                                        ],
-                                        "levels": [
-                                          { "id": "unknown", "label": "모름", "mastery": 0 },
-                                          { "id": "heard", "label": "들어봄", "mastery": 0.33 },
-                                          { "id": "tried", "label": "해봄", "mastery": 0.66 },
-                                          { "id": "independent", "label": "혼자 가능", "mastery": 1.0 }
-                                        ]
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "JOB_PROFILE_NOT_READY — 해당 직무의 job_profile 미생성",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {

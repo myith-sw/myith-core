@@ -3,6 +3,8 @@ package com.myith.core.adapter.in.web;
 import com.myith.core.application.dashboard.DashboardQueryService;
 import com.myith.core.application.export.ExportService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
+import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -38,68 +40,12 @@ public class DashboardController {
                     radar는 배열이다. 축 개수가 직무마다 다르므로 고정 키 객체로 만들지 않는다.
                     percent는 단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100이다. 가중평균이 아니다."""
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": {
-                                "character": {
-                                  "nickname": "견습 서버 개발자",
-                                  "jobName": "백엔드 개발자",
-                                  "species": "deokbaseu",
-                                  "stage": 4,
-                                  "stageLabel": "완성",
-                                  "completionRate": 80,
-                                  "completedQuestCount": 7,
-                                  "level": 4
-                                },
-                                "radar": [
-                                  { "axisCode": "programming", "axisName": "프로그래밍 기초", "percent": 67 },
-                                  { "axisCode": "cs", "axisName": "CS·자료구조", "percent": 80 },
-                                  { "axisCode": "database", "axisName": "데이터입출력", "percent": 18 },
-                                  { "axisCode": "server-api", "axisName": "서버·API", "percent": 67 },
-                                  { "axisCode": "collaboration", "axisName": "협업·형상관리", "percent": 90 },
-                                  { "axisCode": "deploy", "axisName": "배포·운영", "percent": 10 }
-                                ],
-                                "skillTree": [
-                                  {
-                                    "level": 1,
-                                    "quests": [
-                                      {
-                                        "questId": "qst_01",
-                                        "title": "버전관리로 협업한다",
-                                        "axisCode": "collaboration",
-                                        "axisName": "협업·형상관리",
-                                        "status": "DONE"
-                                      }
-                                    ]
-                                  }
-                                ],
-                                "experienceCards": [
-                                  {
-                                    "experienceId": "exp_01",
-                                    "questId": "qst_02",
-                                    "title": "언어 기초로 토이앱을 만든다",
-                                    "axisCode": "programming",
-                                    "axisName": "프로그래밍 기초",
-                                    "ncsUnitName": "프로그래밍언어활용",
-                                    "star": {
-                                      "situation": "팀 프로젝트에서 API 응답이 3초 이상 걸리는 문제가 발생했다.",
-                                      "task": "응답 시간을 500ms 이하로 줄여야 했다.",
-                                      "action": "N+1 쿼리를 페치 조인으로 개선하고 Redis 캐시를 도입했다.",
-                                      "result": "평균 응답 시간이 200ms로 감소했다."
-                                    },
-                                    "createdAt": "2026-07-22T05:00:00Z"
-                                  }
-                                ],
-                                "updatedAt": "2026-07-24T03:00:00Z"
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<DashboardResponse>> getDashboard(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId) {
-        DashboardQueryService.DashboardDto dto = dashboardQueryService.getDashboard(userId, roadmapId);
+            @PathVariable String roadmapId) {
+        DashboardQueryService.DashboardDto dto = dashboardQueryService.getDashboard(userId, IdCodec.decode(roadmapId));
         DashboardResponse response = new DashboardResponse(
                 new DashboardCharacterResponse(
                         "견습 서버 개발자", "백엔드 개발자", "deokbaseu",
@@ -152,6 +98,7 @@ public class DashboardController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
                     description = "INVALID_EXPORT_FORMAT — format이 md/pdf가 아님",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -163,6 +110,7 @@ public class DashboardController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "NO_EXPORTABLE_EXPERIENCE — 내보낼 STAR 기록이 없음",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -175,11 +123,11 @@ public class DashboardController {
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long roadmapId,
+            @PathVariable String roadmapId,
             @Parameter(description = "내보내기 형식. md(자소서 프롬프트) 또는 pdf(원본 STAR)",
                     schema = @Schema(allowableValues = {"md", "pdf"}, defaultValue = "md"))
             @RequestParam(defaultValue = "md") String format) {
-        ExportService.ExportResult result = exportService.export(userId, roadmapId, format);
+        ExportService.ExportResult result = exportService.export(userId, IdCodec.decode(roadmapId), format);
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename*=UTF-8''myith-server-export." + format)
                 .header("Content-Type", result.contentType())

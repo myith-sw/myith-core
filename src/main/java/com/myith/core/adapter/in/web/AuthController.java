@@ -2,6 +2,7 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.auth.AuthService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -36,18 +37,10 @@ public class AuthController {
                     isNewUser로 프론트가 온보딩(알 선택 화면 1-1)으로 분기한다."""
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.abc",
-                                        "refreshToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.xyz",
-                                        "isNewUser": true
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "INVALID_ID_TOKEN — Google ID Token 검증 실패",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -74,16 +67,10 @@ public class AuthController {
                     refreshToken은 요청 바디로 받는다(httpOnly 쿠키 아님)."""
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "갱신 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.new"
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "갱신 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "INVALID_REFRESH_TOKEN — refreshToken 무효",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
