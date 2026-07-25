@@ -1,7 +1,7 @@
 package com.myith.core.scheduler;
 
-import com.myith.core.adapter.out.persistence.UserJpaEntity;
-import com.myith.core.adapter.out.persistence.UserJpaRepository;
+import com.myith.core.application.port.UserRepository;
+import com.myith.core.domain.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,11 +21,11 @@ public class InactivityScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(InactivityScheduler.class);
 
-    private final UserJpaRepository userRepository;
+    private final UserRepository userRepository;
     private final long thresholdHours;
     private final long cooldownHours;
 
-    public InactivityScheduler(UserJpaRepository userRepository,
+    public InactivityScheduler(UserRepository userRepository,
                                @Value("${policy.inactivity.threshold-hours}") long thresholdHours,
                                @Value("${policy.nudge.cooldown-hours}") long cooldownHours) {
         this.userRepository = userRepository;
@@ -39,9 +39,9 @@ public class InactivityScheduler {
         Instant cutoff = Instant.now().minusSeconds(thresholdHours * 3600);
         Instant nudgeCutoff = Instant.now().minusSeconds(cooldownHours * 3600);
 
-        List<UserJpaEntity> inactive = userRepository.findInactiveUsers(cutoff, nudgeCutoff);
-        for (UserJpaEntity user : inactive) {
-            user.setLastNudgeSentAt(Instant.now());
+        List<User> inactive = userRepository.findInactiveUsers(cutoff, nudgeCutoff);
+        for (User user : inactive) {
+            user.markNudgeSent(Instant.now());
             userRepository.save(user);
             log.info("Nudge marked for user {}", user.getId());
             // HANDOFF(worker): 실제 알림 전송은 NotificationSender 구현 시 추가
