@@ -46,7 +46,7 @@ public class SnapshotService {
         // 현재 max_stage 조회
         String currentMaxStage = snapshotRepository.findByRoadmapId(roadmapId)
                 .map(DashboardSnapshotRepository.SnapshotData::maxStage)
-                .orElse("시작");
+                .orElse(stagePolicy.initialStage());
 
         SnapshotCalculator calculator = new SnapshotCalculator(stagePolicy, axisAggregator);
         SnapshotCalculator.SnapshotResult result = calculator.calculate(quests, currentMaxStage);

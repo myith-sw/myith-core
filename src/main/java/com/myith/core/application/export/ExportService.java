@@ -1,12 +1,12 @@
 package com.myith.core.application.export;
 
-import com.myith.core.adapter.out.persistence.JobJpaRepository;
 import com.myith.core.application.port.*;
+import com.myith.core.application.port.JobReadRepository.JobData;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.domain.character.Character;
+import com.myith.core.domain.dashboard.GrowthStagePolicy;
 import com.myith.core.domain.roadmap.Quest;
 import com.myith.core.domain.roadmap.Roadmap;
-import com.myith.core.domain.star.StarRecord;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +22,8 @@ public class ExportService {
     private final QuestRepository questRepository;
     private final StarRecordRepository starRecordRepository;
     private final DashboardSnapshotRepository snapshotRepository;
-    private final JobJpaRepository jobRepository;
+    private final JobReadRepository jobRepository;
+    private final GrowthStagePolicy stagePolicy;
     private final Map<String, ExportRenderer> renderers;
 
     public ExportService(RoadmapRepository roadmapRepository,
@@ -30,7 +31,8 @@ public class ExportService {
                          QuestRepository questRepository,
                          StarRecordRepository starRecordRepository,
                          DashboardSnapshotRepository snapshotRepository,
-                         JobJpaRepository jobRepository,
+                         JobReadRepository jobRepository,
+                         GrowthStagePolicy stagePolicy,
                          List<ExportRenderer> rendererList) {
         this.roadmapRepository = roadmapRepository;
         this.characterRepository = characterRepository;
@@ -38,6 +40,7 @@ public class ExportService {
         this.starRecordRepository = starRecordRepository;
         this.snapshotRepository = snapshotRepository;
         this.jobRepository = jobRepository;
+        this.stagePolicy = stagePolicy;
         this.renderers = rendererList.stream()
                 .collect(Collectors.toMap(ExportRenderer::fileExtension, r -> r));
     }
@@ -52,8 +55,8 @@ public class ExportService {
             throw new UnsupportedFormatException(format);
         }
 
-        String jobName = jobRepository.findById(roadmap.getJobCode())
-                .map(j -> j.getJobName()).orElse(roadmap.getJobCode());
+        String jobName = jobRepository.findByJobCode(roadmap.getJobCode())
+                .map(JobData::jobName).orElse(roadmap.getJobCode());
 
         Character character = characterRepository.findByRoadmapId(roadmapId).orElse(null);
         DashboardSnapshotRepository.SnapshotData snapshot =
@@ -80,7 +83,7 @@ public class ExportService {
         ExportData data = new ExportData(
                 jobName,
                 character != null ? character.getNickname() : null,
-                snapshot != null ? snapshot.stage() : "시작",
+                snapshot != null ? snapshot.stage() : stagePolicy.initialStage(),
                 snapshot != null ? snapshot.completionRate().toPlainString() : "0",
                 levels
         );
