@@ -5,6 +5,7 @@ import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapCreateService.*;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
 import com.myith.core.common.IdCodec;
 import com.myith.core.domain.roadmap.Quest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -59,26 +60,11 @@ public class RoadmapController {
                     schema = @Schema(type = "string", example = "550e8400-e29b-41d4-a716-446655440000"))
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "즉시 조립 완료 (선택형만)",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(name = "즉시 조립", value = """
-                                    {
-                                      "data": {
-                                        "roadmapId": "rmp_01J3ABC",
-                                        "generationState": "READY"
-                                      }
-                                    }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "비동기 분석 접수 (서술형·repo·파일)",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(name = "비동기 접수", value = """
-                                    {
-                                      "data": {
-                                        "roadmapId": "rmp_01J3ABC",
-                                        "generationState": "ANALYZING"
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "즉시 조립 완료 (선택형만)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "비동기 분석 접수 (서술형·repo·파일)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "VALIDATION_ERROR",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -133,55 +119,7 @@ public class RoadmapController {
                     잠긴 퀘스트(LOCKED)도 목록에 포함한다.
                     version은 낙관적 락용이다. 프론트가 보관했다가 완료·순서변경 요청에 실어 보낸다."""
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": {
-                                "roadmapId": "rmp_01J3ABC",
-                                "generationState": "READY",
-                                "roadmapStatus": "ACTIVE",
-                                "jobCode": "server",
-                                "jobName": "백엔드 개발자",
-                                "tagline": "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다.",
-                                "character": {
-                                  "characterId": "chr_01J3ABC",
-                                  "species": "deokbaseu",
-                                  "nickname": "견습 서버 개발자",
-                                  "stage": 4,
-                                  "stageLabel": "완성",
-                                  "completionRate": 80
-                                },
-                                "levels": [
-                                  {
-                                    "level": 1,
-                                    "quests": [
-                                      {
-                                        "questId": "qst_01",
-                                        "title": "버전관리로 협업한다",
-                                        "axisCode": "collaboration",
-                                        "axisName": "협업·형상관리",
-                                        "status": "DONE",
-                                        "source": "SKILL",
-                                        "order": 1,
-                                        "version": 3
-                                      },
-                                      {
-                                        "questId": "qst_02",
-                                        "title": "언어 기초로 토이앱을 만든다",
-                                        "axisCode": "programming",
-                                        "axisName": "프로그래밍 기초",
-                                        "status": "ALREADY_KNOWN",
-                                        "source": "SKILL",
-                                        "order": 2,
-                                        "version": 1
-                                      }
-                                    ]
-                                  }
-                                ],
-                                "updatedAt": "2026-07-24T03:00:00Z"
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/{roadmapId}")
     public ResponseEntity<ApiResponse<RoadmapDetailResponse>> getDetail(
             @AuthenticationPrincipal Long userId,
@@ -216,24 +154,10 @@ public class RoadmapController {
             description = "화면 4-1 퀘스트 추가. source는 자동으로 CUSTOM으로 설정된다."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "생성 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "questId": "qst_99",
-                                        "title": "사이드 프로젝트를 운영한다",
-                                        "axisCode": "server-api",
-                                        "axisName": "서버·API",
-                                        "level": 3,
-                                        "status": "OPEN",
-                                        "source": "CUSTOM",
-                                        "order": 4,
-                                        "version": 0
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "VALIDATION_ERROR — title 1~80자, level은 해당 로드맵의 레벨 범위 내",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -244,6 +168,7 @@ public class RoadmapController {
                                       }
                                     }""")))
     })
+    @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/{roadmapId}/quests")
     public ResponseEntity<ApiResponse<AddQuestResponse>> addQuest(
             @AuthenticationPrincipal Long userId,
@@ -267,42 +192,10 @@ public class RoadmapController {
             description = "화면 4-1 드래그&드롭으로 퀘스트 순서를 변경한다. version은 낙관적 락용이다."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 성공. 갱신된 전체 레벨·퀘스트 목록 반환",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "levels": [
-                                          {
-                                            "level": 1,
-                                            "quests": [
-                                              {
-                                                "questId": "qst_02",
-                                                "title": "언어 기초로 토이앱을 만든다",
-                                                "axisCode": "programming",
-                                                "axisName": "프로그래밍 기초",
-                                                "status": "ALREADY_KNOWN",
-                                                "source": "SKILL",
-                                                "order": 1,
-                                                "version": 1
-                                              },
-                                              {
-                                                "questId": "qst_01",
-                                                "title": "버전관리로 협업한다",
-                                                "axisCode": "collaboration",
-                                                "axisName": "협업·형상관리",
-                                                "status": "DONE",
-                                                "source": "SKILL",
-                                                "order": 2,
-                                                "version": 3
-                                              }
-                                            ]
-                                          }
-                                        ]
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 성공. 갱신된 전체 레벨·퀘스트 목록 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "VERSION_CONFLICT — 낙관적 락 실패",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
@@ -343,6 +236,7 @@ public class RoadmapController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "삭제 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "CUSTOM_QUEST_ONLY — 사용자 정의 퀘스트가 아닌데 삭제 시도",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {

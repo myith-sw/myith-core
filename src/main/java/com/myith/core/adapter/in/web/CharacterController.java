@@ -4,8 +4,6 @@ import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -37,33 +35,7 @@ public class CharacterController {
                     사이드바 카드와 홈 화면 카드가 함께 쓴다.
                     status=archived로 아카이브된 로드맵을 조회한다(경험 카드 열람용)."""
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": [
-                                {
-                                  "characterId": "chr_01J3ABC",
-                                  "roadmapId": "rmp_01J3ABC",
-                                  "species": "deokbaseu",
-                                  "nickname": "견습 서버 개발자",
-                                  "jobCode": "server",
-                                  "jobName": "백엔드 개발자",
-                                  "tagline": "서버와 데이터베이스를 설계하고, 안정적으로 동작하는 API를 구현합니다.",
-                                  "roadmapStatus": "ACTIVE",
-                                  "completionRate": 80,
-                                  "stage": 4,
-                                  "stageLabel": "완성",
-                                  "level": 4,
-                                  "nextQuest": {
-                                    "questId": "qst_01J3ABC",
-                                    "title": "REST API 서버를 구현한다"
-                                  },
-                                  "createdAt": "2026-07-20T02:00:00Z",
-                                  "updatedAt": "2026-07-24T03:00:00Z"
-                                }
-                              ]
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping
     public ResponseEntity<ApiResponse<List<CharacterResponse>>> getCharacters(
             @AuthenticationPrincipal Long userId,

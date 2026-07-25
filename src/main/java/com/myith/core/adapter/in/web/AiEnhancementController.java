@@ -32,6 +32,7 @@ public class AiEnhancementController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리 중",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = AiEnhancementResultResponse.class),
                             examples = @ExampleObject(name = "PROCESSING", value = """
                                     {
                                       "data": {
@@ -41,6 +42,7 @@ public class AiEnhancementController {
                                     }"""))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "완료",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = AiEnhancementResultResponse.class),
                             examples = @ExampleObject(name = "COMPLETED", value = """
                                     {
                                       "data": {
@@ -66,6 +68,7 @@ public class AiEnhancementController {
                                     }"""))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "실패",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = AiEnhancementResultResponse.class),
                             examples = @ExampleObject(name = "FAILED", value = """
                                     {
                                       "data": {

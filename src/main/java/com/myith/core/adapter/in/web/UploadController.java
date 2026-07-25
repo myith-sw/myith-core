@@ -3,6 +3,7 @@ package com.myith.core.adapter.in.web;
 import com.myith.core.application.port.FileStoragePort;
 import com.myith.core.application.upload.UploadService;
 import com.myith.core.common.ApiResponse;
+import com.myith.core.common.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -36,18 +37,10 @@ public class UploadController {
                     허용 타입: application/pdf, image/png, image/jpeg. 상한 10MB."""
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급 성공",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "data": {
-                                        "uploadUrl": "https://myith-uploads.s3.ap-northeast-2.amazonaws.com/...",
-                                        "fileKey": "portfolio/usr_01J3ABC/9f2c1d.pdf",
-                                        "expiresIn": 900
-                                      }
-                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "UNSUPPORTED_FILE_TYPE / FILE_TOO_LARGE",
                     content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class),
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {

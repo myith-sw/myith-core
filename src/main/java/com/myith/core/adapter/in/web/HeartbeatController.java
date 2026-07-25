@@ -3,8 +3,6 @@ package com.myith.core.adapter.in.web;
 import com.myith.core.application.presence.HeartbeatService;
 import com.myith.core.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -32,19 +30,7 @@ public class HeartbeatController {
                     heartbeat 자체는 활동 시각을 갱신하지 않는다(갱신하면 48시간이 영원히 지나지 않는다).
                     캐릭터가 없으면 characterState: null."""
     )
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "응답",
-            content = @Content(mediaType = "application/json",
-                    examples = @ExampleObject(value = """
-                            {
-                              "data": {
-                                "nudge": true,
-                                "characterState": {
-                                  "species": "deokbaseu",
-                                  "stage": 4,
-                                  "completionRate": 80
-                                }
-                              }
-                            }""")))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "응답")
     @PostMapping("/heartbeat")
     public ResponseEntity<ApiResponse<HeartbeatResponse>> heartbeat(
             @AuthenticationPrincipal Long userId) {
