@@ -3,6 +3,7 @@ package com.myith.core.domain.roadmap;
 public enum QuestStatus {
     LOCKED,
     OPEN,
+    PENDING,
     DONE,
     ALREADY_KNOWN;
 
