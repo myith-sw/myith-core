@@ -3,10 +3,10 @@ package com.myith.core.application.roadmap;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.myith.core.adapter.out.persistence.JobJpaEntity;
-import com.myith.core.adapter.out.persistence.JobJpaRepository;
-import com.myith.core.adapter.out.persistence.JobProfileJpaEntity;
-import com.myith.core.adapter.out.persistence.JobProfileJpaRepository;
+import com.myith.core.application.port.JobProfileReadRepository;
+import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
+import com.myith.core.application.port.JobReadRepository;
+import com.myith.core.application.port.JobReadRepository.JobData;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +17,12 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class JobQueryService {
 
-    private final JobJpaRepository jobRepository;
-    private final JobProfileJpaRepository jobProfileRepository;
+    private final JobReadRepository jobRepository;
+    private final JobProfileReadRepository jobProfileRepository;
     private final ObjectMapper objectMapper;
 
-    public JobQueryService(JobJpaRepository jobRepository,
-                           JobProfileJpaRepository jobProfileRepository,
+    public JobQueryService(JobReadRepository jobRepository,
+                           JobProfileReadRepository jobProfileRepository,
                            ObjectMapper objectMapper) {
         this.jobRepository = jobRepository;
         this.jobProfileRepository = jobProfileRepository;
@@ -30,22 +30,22 @@ public class JobQueryService {
     }
 
     public List<CategoryDto> getJobList() {
-        List<JobJpaEntity> jobs = jobRepository.findAllByOrderByCategoryCodeAscJobNameAsc();
+        List<JobData> jobs = jobRepository.findAllOrderByCategoryAndName();
 
-        Map<String, List<JobJpaEntity>> grouped = jobs.stream()
-                .collect(Collectors.groupingBy(JobJpaEntity::getCategoryCode, LinkedHashMap::new, Collectors.toList()));
+        Map<String, List<JobData>> grouped = jobs.stream()
+                .collect(Collectors.groupingBy(JobData::categoryCode, LinkedHashMap::new, Collectors.toList()));
 
         List<CategoryDto> categories = new ArrayList<>();
         for (var entry : grouped.entrySet()) {
-            List<JobJpaEntity> categoryJobs = entry.getValue();
-            String categoryName = categoryJobs.getFirst().getCategoryName();
+            List<JobData> categoryJobs = entry.getValue();
+            String categoryName = categoryJobs.getFirst().categoryName();
 
             List<JobDto> jobDtos = categoryJobs.stream().map(job -> {
-                Optional<JobProfileJpaEntity> profile = jobProfileRepository.findLatestByJobCode(job.getJobCode());
-                List<String> keywords = profile.map(p -> extractKeywords(p.getAxes())).orElse(Collections.emptyList());
+                Optional<JobProfileData> profile = jobProfileRepository.findLatestByJobCode(job.jobCode());
+                List<String> keywords = profile.map(p -> extractKeywords(p.axes())).orElse(Collections.emptyList());
                 boolean available = profile.isPresent();
                 // TODO: profile 없을 때 JobProfileBuildRequested Outbox 발행
-                return new JobDto(job.getJobCode(), job.getJobName(), job.getTagline(), keywords, available);
+                return new JobDto(job.jobCode(), job.jobName(), job.tagline(), keywords, available);
             }).toList();
 
             categories.add(new CategoryDto(entry.getKey(), categoryName, jobDtos));
@@ -54,11 +54,11 @@ public class JobQueryService {
     }
 
     public DiagnosisDto getDiagnosis(String jobCode) {
-        JobProfileJpaEntity profile = jobProfileRepository.findLatestByJobCode(jobCode)
+        JobProfileData profile = jobProfileRepository.findLatestByJobCode(jobCode)
                 .orElseThrow(() -> new JobProfileNotFoundException(jobCode));
 
-        List<QuestionDto> questions = parseQuestions(profile.getQuestions());
-        return new DiagnosisDto(profile.getVersion(), questions);
+        List<QuestionDto> questions = parseQuestions(profile.questions());
+        return new DiagnosisDto(profile.version(), questions);
     }
 
     private List<String> extractKeywords(String axesJson) {

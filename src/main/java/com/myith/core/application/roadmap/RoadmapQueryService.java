@@ -3,12 +3,11 @@ package com.myith.core.application.roadmap;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.myith.core.adapter.out.persistence.JobJpaEntity;
-import com.myith.core.adapter.out.persistence.JobJpaRepository;
-import com.myith.core.adapter.out.persistence.JobProfileJpaEntity;
-import com.myith.core.adapter.out.persistence.JobProfileJpaRepository;
 import com.myith.core.application.port.*;
+import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
+import com.myith.core.application.port.JobReadRepository.JobData;
 import com.myith.core.domain.character.Character;
+import com.myith.core.domain.dashboard.GrowthStagePolicy;
 import com.myith.core.domain.roadmap.Quest;
 import com.myith.core.domain.roadmap.Roadmap;
 import org.springframework.stereotype.Service;
@@ -26,16 +25,18 @@ public class RoadmapQueryService {
     private final CharacterRepository characterRepository;
     private final QuestRepository questRepository;
     private final DashboardSnapshotRepository snapshotRepository;
-    private final JobJpaRepository jobRepository;
-    private final JobProfileJpaRepository jobProfileRepository;
+    private final JobReadRepository jobRepository;
+    private final JobProfileReadRepository jobProfileRepository;
+    private final GrowthStagePolicy stagePolicy;
     private final ObjectMapper objectMapper;
 
     public RoadmapQueryService(RoadmapRepository roadmapRepository,
                                CharacterRepository characterRepository,
                                QuestRepository questRepository,
                                DashboardSnapshotRepository snapshotRepository,
-                               JobJpaRepository jobRepository,
-                               JobProfileJpaRepository jobProfileRepository,
+                               JobReadRepository jobRepository,
+                               JobProfileReadRepository jobProfileRepository,
+                               GrowthStagePolicy stagePolicy,
                                ObjectMapper objectMapper) {
         this.roadmapRepository = roadmapRepository;
         this.characterRepository = characterRepository;
@@ -43,6 +44,7 @@ public class RoadmapQueryService {
         this.snapshotRepository = snapshotRepository;
         this.jobRepository = jobRepository;
         this.jobProfileRepository = jobProfileRepository;
+        this.stagePolicy = stagePolicy;
         this.objectMapper = objectMapper;
     }
 
@@ -57,9 +59,9 @@ public class RoadmapQueryService {
                 snapshotRepository.findByRoadmapId(roadmapId).orElse(null);
 
         // job 이름, tagline 조회
-        JobJpaEntity job = jobRepository.findById(roadmap.getJobCode()).orElse(null);
-        String jobName = job != null ? job.getJobName() : roadmap.getJobCode();
-        String tagline = job != null ? job.getTagline() : null;
+        JobData job = jobRepository.findByJobCode(roadmap.getJobCode()).orElse(null);
+        String jobName = job != null ? job.jobName() : roadmap.getJobCode();
+        String tagline = job != null ? job.tagline() : null;
 
         // axisCode → axisName 매핑 (job_profile에서)
         Map<String, String> axisNameMap = buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
@@ -99,7 +101,7 @@ public class RoadmapQueryService {
             DashboardSnapshotRepository.SnapshotData snapshot =
                     snapshotRepository.findByRoadmapId(roadmap.getId()).orElse(null);
 
-            JobJpaEntity job = jobRepository.findById(roadmap.getJobCode()).orElse(null);
+            JobData job = jobRepository.findByJobCode(roadmap.getJobCode()).orElse(null);
 
             // 다음 퀘스트: OPEN 상태 중 가장 낮은 레벨·순서
             List<Quest> quests = questRepository.findByRoadmapId(roadmap.getId());
@@ -118,10 +120,10 @@ public class RoadmapQueryService {
                     character.getId(), roadmap.getId(),
                     character.getSpecies(), character.getNickname(),
                     roadmap.getJobCode(),
-                    job != null ? job.getJobName() : roadmap.getJobCode(),
-                    job != null ? job.getTagline() : null,
+                    job != null ? job.jobName() : roadmap.getJobCode(),
+                    job != null ? job.tagline() : null,
                     snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO,
-                    snapshot != null ? snapshot.stage() : "시작",
+                    snapshot != null ? snapshot.stage() : stagePolicy.initialStage(),
                     currentLevel,
                     nextQuest != null ? new NextQuestDto(nextQuest.getId(), nextQuest.getTitle()) : null
             ));
@@ -130,11 +132,11 @@ public class RoadmapQueryService {
     }
 
     private Map<String, String> buildAxisNameMap(String jobCode, int version) {
-        return jobProfileRepository.findById(new JobProfileJpaEntity.JobProfileId(jobCode, version))
+        return jobProfileRepository.findByJobCodeAndVersion(jobCode, version)
                 .map(p -> {
                     try {
                         List<Map<String, String>> axes = objectMapper.readValue(
-                                p.getAxes(), new TypeReference<>() {});
+                                p.axes(), new TypeReference<>() {});
                         return axes.stream().collect(Collectors.toMap(
                                 a -> a.get("axisCode"), a -> a.get("axisName")));
                     } catch (JsonProcessingException e) {

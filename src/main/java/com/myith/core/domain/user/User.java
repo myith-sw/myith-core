@@ -33,6 +33,18 @@ public class User {
         return new User(null, email, googleId, nickname, profileImageUrl, now, now, now);
     }
 
+    public static User restore(Long id, String email, String googleId, String nickname,
+                                String profileImageUrl, Instant lastHeartbeatAt, Instant lastActiveAt,
+                                Instant lastNudgeSentAt, Instant createdAt, Instant updatedAt,
+                                Instant deletedAt) {
+        User user = new User(id, email, googleId, nickname, profileImageUrl, lastActiveAt, createdAt, updatedAt);
+        user.id = id;
+        user.lastHeartbeatAt = lastHeartbeatAt;
+        user.lastNudgeSentAt = lastNudgeSentAt;
+        user.deletedAt = deletedAt;
+        return user;
+    }
+
     public void updateProfile(String nickname, String profileImageUrl) {
         if (nickname != null) this.nickname = nickname;
         if (profileImageUrl != null) this.profileImageUrl = profileImageUrl;
@@ -55,6 +67,11 @@ public class User {
 
     public void touchHeartbeat(Instant now) {
         this.lastHeartbeatAt = now;
+        this.updatedAt = now;
+    }
+
+    public void markNudgeSent(Instant now) {
+        this.lastNudgeSentAt = now;
         this.updatedAt = now;
     }
 

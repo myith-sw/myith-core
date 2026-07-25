@@ -1,13 +1,17 @@
 package com.myith.core.application.quest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.myith.core.adapter.out.persistence.*;
 import com.myith.core.application.dashboard.SnapshotService;
 import com.myith.core.application.port.*;
+import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
+import com.myith.core.application.port.NcsReadRepository.CertificationData;
+import com.myith.core.application.port.NcsReadRepository.NcsUnitData;
 import com.myith.core.domain.roadmap.Quest;
 import com.myith.core.domain.roadmap.QuestStatus;
 import com.myith.core.domain.roadmap.Roadmap;
+import com.myith.core.domain.roadmap.RoadmapAssembler.Prerequisite;
 import com.myith.core.domain.star.StarRecord;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class QuestDetailService {
@@ -26,8 +31,8 @@ public class QuestDetailService {
     private final StarRecordRepository starRecordRepository;
     private final OutboxRepository outboxRepository;
     private final SnapshotService snapshotService;
-    private final NcsUnitJpaRepository ncsUnitRepository;
-    private final NcsCertificationJpaRepository ncsCertRepository;
+    private final NcsReadRepository ncsReadRepository;
+    private final JobProfileReadRepository jobProfileReadRepository;
     private final ObjectMapper objectMapper;
     private final int maxRetries;
 
@@ -36,8 +41,8 @@ public class QuestDetailService {
                               StarRecordRepository starRecordRepository,
                               OutboxRepository outboxRepository,
                               SnapshotService snapshotService,
-                              NcsUnitJpaRepository ncsUnitRepository,
-                              NcsCertificationJpaRepository ncsCertRepository,
+                              NcsReadRepository ncsReadRepository,
+                              JobProfileReadRepository jobProfileReadRepository,
                               ObjectMapper objectMapper,
                               @Value("${policy.optimistic-lock.max-retries}") int maxRetries) {
         this.questRepository = questRepository;
@@ -45,8 +50,8 @@ public class QuestDetailService {
         this.starRecordRepository = starRecordRepository;
         this.outboxRepository = outboxRepository;
         this.snapshotService = snapshotService;
-        this.ncsUnitRepository = ncsUnitRepository;
-        this.ncsCertRepository = ncsCertRepository;
+        this.ncsReadRepository = ncsReadRepository;
+        this.jobProfileReadRepository = jobProfileReadRepository;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
     }
@@ -64,11 +69,11 @@ public class QuestDetailService {
         NcsUnitDto ncsUnit = null;
         List<CertDto> certifications = List.of();
         if (quest.getNcsUnitCode() != null) {
-            ncsUnit = ncsUnitRepository.findById(quest.getNcsUnitCode())
-                    .map(e -> new NcsUnitDto(e.getCode(), e.getName(), e.getDescription()))
+            ncsUnit = ncsReadRepository.findUnitByCode(quest.getNcsUnitCode())
+                    .map(e -> new NcsUnitDto(e.code(), e.name(), e.description()))
                     .orElse(null);
-            certifications = ncsCertRepository.findByNcsUnitCode(quest.getNcsUnitCode()).stream()
-                    .map(e -> new CertDto(e.getCertName()))
+            certifications = ncsReadRepository.findCertificationsByUnitCode(quest.getNcsUnitCode()).stream()
+                    .map(e -> new CertDto(e.certName()))
                     .toList();
         }
 
@@ -121,8 +126,8 @@ public class QuestDetailService {
         }
 
         // 사이드이펙트 1: 완료 시 후행 퀘스트 LOCKED 해제
-        if (completed && quest.getSkillCode() != null) {
-            unlockDependentQuests(quest.getRoadmapId(), quest.getSkillCode());
+        if (completed) {
+            unlockDependentQuests(roadmap);
         }
 
         // 사이드이펙트 2: 스냅샷 재계산
@@ -131,23 +136,38 @@ public class QuestDetailService {
 
     /**
      * 선행 퀘스트가 완료되면 후행 LOCKED 퀘스트를 OPEN으로 전환.
-     * job_profile의 prerequisites를 DB에서 다시 읽지 않고, 같은 로드맵 퀘스트의 상태로 판단.
+     * job_profile의 prerequisites를 읽어서 실제 선후관계를 확인한다.
      */
-    private void unlockDependentQuests(Long roadmapId, String completedSkillCode) {
-        List<Quest> allQuests = questRepository.findByRoadmapId(roadmapId);
+    private void unlockDependentQuests(Roadmap roadmap) {
+        List<Quest> allQuests = questRepository.findByRoadmapId(roadmap.getId());
 
-        // 현재 완료된 스킬 목록
-        Set<String> completedSkills = new HashSet<>();
-        for (Quest q : allQuests) {
-            if (q.getSkillCode() != null && q.getStatus().isCompleted()) {
-                completedSkills.add(q.getSkillCode());
-            }
+        // 선후관계 조회
+        JobProfileData profile = jobProfileReadRepository
+                .findByJobCodeAndVersion(roadmap.getJobCode(), roadmap.getProfileVersion())
+                .orElse(null);
+        if (profile == null) return;
+
+        List<Prerequisite> prerequisites = parsePrerequisites(profile.prerequisites());
+        if (prerequisites.isEmpty()) return;
+
+        // skillCode → 선행으로 필요한 스킬 목록
+        Map<String, Set<String>> prereqMap = new HashMap<>();
+        for (Prerequisite p : prerequisites) {
+            prereqMap.computeIfAbsent(p.to(), k -> new HashSet<>()).add(p.from());
         }
 
-        // LOCKED 퀘스트 중 선행이 모두 완료된 것을 OPEN으로 전환
-        // (선후관계를 퀘스트 레벨로 추론: 같은 스킬의 하위 레벨이 모두 완료되면 해제)
+        // 현재 완료된 스킬 목록
+        Set<String> completedSkills = allQuests.stream()
+                .filter(q -> q.getSkillCode() != null && q.getStatus().isCompleted())
+                .map(Quest::getSkillCode)
+                .collect(Collectors.toSet());
+
+        // LOCKED 퀘스트 중 선행이 모두 완료된 것만 OPEN으로 전환
         for (Quest q : allQuests) {
-            if (q.getStatus() == QuestStatus.LOCKED) {
+            if (q.getStatus() != QuestStatus.LOCKED || q.getSkillCode() == null) continue;
+
+            Set<String> required = prereqMap.getOrDefault(q.getSkillCode(), Set.of());
+            if (completedSkills.containsAll(required)) {
                 Quest unlocked = Quest.restore(
                         q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                         q.getLevel(), q.getOrderInLevel(), q.getTitle(),
@@ -157,6 +177,17 @@ public class QuestDetailService {
                 );
                 questRepository.save(unlocked);
             }
+        }
+    }
+
+    private List<Prerequisite> parsePrerequisites(String prerequisitesJson) {
+        if (prerequisitesJson == null || prerequisitesJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(prerequisitesJson, new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            return List.of();
         }
     }
 

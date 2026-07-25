@@ -2,6 +2,8 @@ package com.myith.core.application.port;
 
 import com.myith.core.domain.user.User;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository {
@@ -13,4 +15,6 @@ public interface UserRepository {
     Optional<User> findByGoogleId(String googleId);
 
     Optional<User> findByEmail(String email);
+
+    List<User> findInactiveUsers(Instant activityCutoff, Instant nudgeCutoff);
 }

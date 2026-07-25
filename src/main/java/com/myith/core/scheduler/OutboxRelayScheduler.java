@@ -1,17 +1,17 @@
 package com.myith.core.scheduler;
 
-import com.myith.core.adapter.out.persistence.OutboxJpaEntity;
-import com.myith.core.adapter.out.persistence.OutboxJpaRepository;
+import com.myith.core.application.port.OutboxRepository;
+import com.myith.core.application.port.OutboxRepository.OutboxEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.MessageBuilder;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
@@ -22,42 +22,45 @@ import java.util.List;
 public class OutboxRelayScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxRelayScheduler.class);
-    private static final String EXCHANGE = "myith.core.events";
 
-    private final OutboxJpaRepository outboxRepository;
+    private final OutboxRepository outboxRepository;
     private final RabbitTemplate rabbitTemplate;
+    private final String exchange;
+    private final int maxRetries;
 
-    public OutboxRelayScheduler(OutboxJpaRepository outboxRepository,
-                                RabbitTemplate rabbitTemplate) {
+    public OutboxRelayScheduler(OutboxRepository outboxRepository,
+                                RabbitTemplate rabbitTemplate,
+                                @Value("${policy.messaging.core-exchange}") String exchange,
+                                @Value("${policy.outbox.max-retries}") int maxRetries) {
         this.outboxRepository = outboxRepository;
         this.rabbitTemplate = rabbitTemplate;
+        this.exchange = exchange;
+        this.maxRetries = maxRetries;
     }
 
     @Scheduled(fixedDelayString = "${policy.outbox.relay-interval-ms:1000}")
     @Transactional
     public void relay() {
-        List<OutboxJpaEntity> pending = outboxRepository.findByStatusOrderByCreatedAtAsc("PENDING");
-        for (OutboxJpaEntity event : pending) {
+        List<OutboxEvent> pending = outboxRepository.findPending();
+        for (OutboxEvent event : pending) {
             try {
-                String routingKey = event.getEventType();
-                rabbitTemplate.send(EXCHANGE, routingKey,
-                        MessageBuilder.withBody(event.getPayload().getBytes())
+                String routingKey = event.eventType();
+                rabbitTemplate.send(exchange, routingKey,
+                        MessageBuilder.withBody(event.payload().getBytes())
                                 .setContentType(MessageProperties.CONTENT_TYPE_JSON)
-                                .setHeader("eventId", event.getEventId().toString())
-                                .setHeader("eventType", event.getEventType())
+                                .setHeader("eventId", event.eventId().toString())
+                                .setHeader("eventType", event.eventType())
                                 .setHeader("traceId", org.slf4j.MDC.get("traceId"))
                                 .build());
 
-                event.markPublished();
-                outboxRepository.save(event);
-                log.info("Outbox relayed: eventId={}, type={}", event.getEventId(), event.getEventType());
+                outboxRepository.markPublished(event.id());
+                log.info("Outbox relayed: eventId={}, type={}", event.eventId(), event.eventType());
             } catch (Exception e) {
-                event.incrementRetry();
-                if (event.getRetryCount() > 5) {
-                    event.markFailed();
+                outboxRepository.incrementRetry(event.id());
+                if (event.retryCount() + 1 > maxRetries) {
+                    outboxRepository.markFailed(event.id());
                 }
-                outboxRepository.save(event);
-                log.error("Outbox relay failed: eventId={}, retries={}", event.getEventId(), event.getRetryCount(), e);
+                log.error("Outbox relay failed: eventId={}, retries={}", event.eventId(), event.retryCount() + 1, e);
             }
         }
     }

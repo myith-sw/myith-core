@@ -2,9 +2,8 @@ package com.myith.core.application.roadmap;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.myith.core.adapter.out.persistence.JobProfileJpaEntity;
-import com.myith.core.adapter.out.persistence.JobProfileJpaRepository;
 import com.myith.core.application.port.*;
+import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
 import com.myith.core.domain.character.Character;
 import com.myith.core.domain.dashboard.*;
 import com.myith.core.domain.diagnosis.UserDiagnosis;
@@ -26,10 +25,11 @@ public class RoadmapCreateService {
     private final DiagnosisRepository diagnosisRepository;
     private final DashboardSnapshotRepository snapshotRepository;
     private final OutboxRepository outboxRepository;
-    private final JobProfileJpaRepository jobProfileRepository;
+    private final JobProfileReadRepository jobProfileRepository;
     private final ObjectMapper objectMapper;
     private final GrowthStagePolicy stagePolicy;
     private final AxisAggregator axisAggregator;
+    private final BigDecimal alreadyKnownThreshold;
 
     public RoadmapCreateService(RoadmapRepository roadmapRepository,
                                 CharacterRepository characterRepository,
@@ -37,10 +37,11 @@ public class RoadmapCreateService {
                                 DiagnosisRepository diagnosisRepository,
                                 DashboardSnapshotRepository snapshotRepository,
                                 OutboxRepository outboxRepository,
-                                JobProfileJpaRepository jobProfileRepository,
+                                JobProfileReadRepository jobProfileRepository,
                                 ObjectMapper objectMapper,
                                 GrowthStagePolicy stagePolicy,
-                                AxisAggregator axisAggregator) {
+                                AxisAggregator axisAggregator,
+                                @Value("${policy.mastery.already-known-threshold}") BigDecimal alreadyKnownThreshold) {
         this.roadmapRepository = roadmapRepository;
         this.characterRepository = characterRepository;
         this.questRepository = questRepository;
@@ -51,13 +52,14 @@ public class RoadmapCreateService {
         this.objectMapper = objectMapper;
         this.stagePolicy = stagePolicy;
         this.axisAggregator = axisAggregator;
+        this.alreadyKnownThreshold = alreadyKnownThreshold;
     }
 
     @Transactional
     public CreateResult create(Long userId, CreateCommand cmd) {
         // 1. job_profile 조회
-        JobProfileJpaEntity profile = jobProfileRepository
-                .findById(new JobProfileJpaEntity.JobProfileId(cmd.jobCode(), cmd.profileVersion()))
+        JobProfileData profile = jobProfileRepository
+                .findByJobCodeAndVersion(cmd.jobCode(), cmd.profileVersion())
                 .orElseThrow(() -> new JobQueryService.JobProfileNotFoundException(cmd.jobCode()));
 
         // 2. 기존 ACTIVE 로드맵 아카이브 (D-8)
@@ -100,7 +102,8 @@ public class RoadmapCreateService {
             // 비정형 → Outbox 이벤트 발행, Worker에 위임
             publishRoadmapGenerationEvent(roadmap, cmd);
             // 빈 스냅샷 초기화 (조립 전이라도 조회 가능하도록)
-            snapshotRepository.save(roadmap.getId(), BigDecimal.ZERO, "시작", "시작", "[]", 0);
+            String initial = stagePolicy.initialStage();
+            snapshotRepository.save(roadmap.getId(), BigDecimal.ZERO, initial, initial, "[]", 0);
         }
 
         return new CreateResult(roadmap.getId(), hasNarrative);
@@ -110,12 +113,12 @@ public class RoadmapCreateService {
      * 퀘스트 조립 + 스냅샷 계산.
      * 정합성 스케줄러(D-13)에서도 호출하므로 public.
      */
-    public void assembleAndSnapshot(Roadmap roadmap, JobProfileJpaEntity profile,
+    public void assembleAndSnapshot(Roadmap roadmap, JobProfileData profile,
                                     List<AnswerDto> answers) {
         ProfileDataParser parser = new ProfileDataParser(objectMapper);
         ProfileData profileData = parser.parse(
-                profile.getSkills(), profile.getLevels(), profile.getPrerequisites(),
-                profile.getQuestTemplates(), profile.getActivityQuests());
+                profile.skills(), profile.levels(), profile.prerequisites(),
+                profile.questTemplates(), profile.activityQuests());
 
         // 자가진단 → Map
         Map<String, BigDecimal> selfAssessment = new HashMap<>();
@@ -127,13 +130,13 @@ public class RoadmapCreateService {
         // HANDOFF(worker): CompetencyExtracted 수신 후 여기에 aiAssessment를 넘긴다.
 
         List<Quest> quests = RoadmapAssembler.assemble(
-                roadmap.getId(), profileData, selfAssessment, null);
+                roadmap.getId(), profileData, selfAssessment, null, alreadyKnownThreshold);
 
         questRepository.saveAll(quests);
 
         // 스냅샷 계산
         SnapshotCalculator calculator = new SnapshotCalculator(stagePolicy, axisAggregator);
-        SnapshotCalculator.SnapshotResult result = calculator.calculate(quests, "시작");
+        SnapshotCalculator.SnapshotResult result = calculator.calculate(quests, stagePolicy.initialStage());
 
         String radarJson = serializeRadar(result.radar());
         snapshotRepository.save(roadmap.getId(), result.completionRate(),

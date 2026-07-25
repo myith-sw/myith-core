@@ -74,10 +74,15 @@ policy:
     dashboard-ttl-seconds: ${CACHE_DASHBOARD_TTL:600}
     job-profile-ttl-seconds: ${CACHE_JOB_PROFILE_TTL:3600}
     master-data-ttl-seconds: ${CACHE_MASTER_TTL:86400}
+  mastery:
+    already-known-threshold: ${MASTERY_THRESHOLD:0.66}
   optimistic-lock:
     max-retries: ${LOCK_MAX_RETRIES:3}
   outbox:
     relay-interval-ms: ${OUTBOX_RELAY_INTERVAL:1000}
+    max-retries: ${OUTBOX_MAX_RETRIES:5}
+  messaging:
+    core-exchange: ${CORE_EXCHANGE:myith.core.events}
   consistency:
     max-retries: ${CONSISTENCY_MAX_RETRIES:3}
   analysis:

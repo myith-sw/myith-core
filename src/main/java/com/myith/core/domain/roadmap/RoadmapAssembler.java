@@ -18,12 +18,11 @@ import java.util.stream.Collectors;
  */
 public class RoadmapAssembler {
 
-    private static final BigDecimal ALREADY_KNOWN_THRESHOLD = new BigDecimal("0.66");
-
     public static List<Quest> assemble(Long roadmapId,
                                        ProfileData profile,
                                        Map<String, BigDecimal> selfAssessment,
-                                       Map<String, CompetencyEntry> aiAssessment) {
+                                       Map<String, CompetencyEntry> aiAssessment,
+                                       BigDecimal alreadyKnownThreshold) {
         // 1. 위상정렬로 선후관계 검증 (순환 감지)
         List<String> topoOrder = topologicalSort(profile.skills(), profile.prerequisites());
 
@@ -50,7 +49,7 @@ public class RoadmapAssembler {
                 SkillWithPriority sp = skillsInLevel.get(i);
                 QuestTemplate template = profile.templateMap().get(sp.skill.skillCode());
 
-                QuestStatus status = determineInitialStatus(sp.mastery);
+                QuestStatus status = determineInitialStatus(sp.mastery, alreadyKnownThreshold);
 
                 quests.add(Quest.createSkillQuest(
                         roadmapId,
@@ -88,8 +87,8 @@ public class RoadmapAssembler {
         return quests;
     }
 
-    private static QuestStatus determineInitialStatus(BigDecimal mastery) {
-        if (mastery.compareTo(ALREADY_KNOWN_THRESHOLD) >= 0) {
+    private static QuestStatus determineInitialStatus(BigDecimal mastery, BigDecimal threshold) {
+        if (mastery.compareTo(threshold) >= 0) {
             return QuestStatus.ALREADY_KNOWN;
         }
         return QuestStatus.OPEN;

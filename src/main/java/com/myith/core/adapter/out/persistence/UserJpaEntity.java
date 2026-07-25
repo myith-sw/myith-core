@@ -62,9 +62,9 @@ public class UserJpaEntity {
     }
 
     public User toDomain() {
-        User user = new User(id, email, googleId, nickname, profileImageUrl, lastActiveAt, createdAt, updatedAt);
-        user.setId(id);
-        return user;
+        return User.restore(id, email, googleId, nickname, profileImageUrl,
+                lastHeartbeatAt, lastActiveAt, lastNudgeSentAt,
+                createdAt, updatedAt, deletedAt);
     }
 
     public Long getId() { return id; }
