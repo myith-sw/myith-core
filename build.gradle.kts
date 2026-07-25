@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "3.4.3"
     id("io.spring.dependency-management") version "1.1.7"
+    id("org.springdoc.openapi-gradle-plugin") version "1.9.0"
 }
 
 group = "com.myith"
@@ -44,7 +45,7 @@ dependencies {
     implementation("com.google.api-client:google-api-client:2.7.2")
 
     // API Documentation
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5")
 
     // AWS S3
     implementation(platform("software.amazon.awssdk:bom:2.29.45"))
@@ -65,4 +66,11 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+openApi {
+    apiDocsUrl.set("http://localhost:8080/v3/api-docs.yaml")
+    outputDir.set(file("$rootDir/docs"))
+    outputFileName.set("openapi.yaml")
+    waitTimeInSeconds.set(60)
 }

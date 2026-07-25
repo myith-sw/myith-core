@@ -11,110 +11,118 @@ import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.application.upload.UploadService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private String requestId() {
+        String traceId = MDC.get("traceId");
+        return traceId != null ? traceId : "req_unknown";
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .reduce((a, b) -> a + ", " + b)
-                .orElse("Validation failed");
-        return ResponseEntity.badRequest()
-                .body(ApiResponse.error("VALIDATION_ERROR", message));
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        e.getBindingResult().getFieldErrors()
+                .forEach(fe -> fieldErrors.put(fe.getField(), fe.getDefaultMessage()));
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("VALIDATION_ERROR", "입력값이 올바르지 않습니다.", fieldErrors, requestId()));
     }
 
     @ExceptionHandler(GoogleTokenVerifier.InvalidGoogleTokenException.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidGoogleToken(GoogleTokenVerifier.InvalidGoogleTokenException e) {
+    public ResponseEntity<ErrorResponse> handleInvalidGoogleToken(GoogleTokenVerifier.InvalidGoogleTokenException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("INVALID_GOOGLE_TOKEN", e.getMessage()));
+                .body(ErrorResponse.of("INVALID_ID_TOKEN", "Google ID Token 검증에 실패했습니다.", requestId()));
     }
 
     @ExceptionHandler(GoogleTokenVerifier.GoogleVerificationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleGoogleVerification(GoogleTokenVerifier.GoogleVerificationException e) {
+    public ResponseEntity<ErrorResponse> handleGoogleVerification(GoogleTokenVerifier.GoogleVerificationException e) {
         log.error("Google verification failed", e);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.error("GOOGLE_VERIFICATION_FAILED", "Google 인증 서비스에 연결할 수 없습니다."));
+                .body(ErrorResponse.of("INTERNAL_ERROR", "Google 인증 서비스에 연결할 수 없습니다.", requestId()));
     }
 
     @ExceptionHandler(AuthService.InvalidTokenException.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidToken(AuthService.InvalidTokenException e) {
+    public ResponseEntity<ErrorResponse> handleInvalidToken(AuthService.InvalidTokenException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("INVALID_TOKEN", e.getMessage()));
+                .body(ErrorResponse.of("INVALID_REFRESH_TOKEN", "유효하지 않은 토큰입니다.", requestId()));
     }
 
     @ExceptionHandler(UserService.UserNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleUserNotFound(UserService.UserNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleUserNotFound(UserService.UserNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("NOT_FOUND", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(RoadmapQueryService.RoadmapNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleRoadmapNotFound(RoadmapQueryService.RoadmapNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleRoadmapNotFound(RoadmapQueryService.RoadmapNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("ROADMAP_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("NOT_FOUND", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(RoadmapQueryService.RoadmapAccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleRoadmapAccessDenied(RoadmapQueryService.RoadmapAccessDeniedException e) {
+    public ResponseEntity<ErrorResponse> handleRoadmapAccessDenied(RoadmapQueryService.RoadmapAccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("ROADMAP_ACCESS_DENIED", e.getMessage()));
+                .body(ErrorResponse.of("FORBIDDEN_RESOURCE", "해당 리소스에 접근할 수 없습니다.", requestId()));
     }
 
     @ExceptionHandler(QuestManageService.QuestNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleQuestNotFound(QuestManageService.QuestNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleQuestNotFound(QuestManageService.QuestNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("QUEST_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("NOT_FOUND", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(QuestManageService.CannotDeleteNonCustomQuestException.class)
-    public ResponseEntity<ApiResponse<Void>> handleCannotDeleteNonCustom(QuestManageService.CannotDeleteNonCustomQuestException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error("CANNOT_DELETE_NON_CUSTOM", e.getMessage()));
+    public ResponseEntity<ErrorResponse> handleCannotDeleteNonCustom(QuestManageService.CannotDeleteNonCustomQuestException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("CUSTOM_QUEST_ONLY", "사용자 정의 퀘스트만 삭제할 수 있습니다.", requestId()));
     }
 
     @ExceptionHandler(QuestManageService.OptimisticLockConflictException.class)
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(QuestManageService.OptimisticLockConflictException e) {
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(QuestManageService.OptimisticLockConflictException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error("OPTIMISTIC_LOCK_CONFLICT", e.getMessage()));
+                .body(ErrorResponse.of("VERSION_CONFLICT", "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.", requestId()));
     }
 
     @ExceptionHandler(RoadmapCreateService.DuplicateSpeciesException.class)
-    public ResponseEntity<ApiResponse<Void>> handleDuplicateSpecies(RoadmapCreateService.DuplicateSpeciesException e) {
+    public ResponseEntity<ErrorResponse> handleDuplicateSpecies(RoadmapCreateService.DuplicateSpeciesException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error("DUPLICATE_SPECIES", e.getMessage()));
+                .body(ErrorResponse.of("VERSION_CONFLICT", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(ExportService.UnsupportedFormatException.class)
-    public ResponseEntity<ApiResponse<Void>> handleUnsupportedFormat(ExportService.UnsupportedFormatException e) {
+    public ResponseEntity<ErrorResponse> handleUnsupportedFormat(ExportService.UnsupportedFormatException e) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("UNSUPPORTED_FORMAT", e.getMessage()));
+                .body(ErrorResponse.of("INVALID_EXPORT_FORMAT", "지원하지 않는 내보내기 형식입니다. md 또는 pdf만 가능합니다.", requestId()));
     }
 
     @ExceptionHandler(UploadService.InvalidFileException.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidFile(UploadService.InvalidFileException e) {
+    public ResponseEntity<ErrorResponse> handleInvalidFile(UploadService.InvalidFileException e) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("INVALID_FILE", e.getMessage()));
+                .body(ErrorResponse.of("UNSUPPORTED_FILE_TYPE", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(JobQueryService.JobProfileNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleJobProfileNotFound(JobQueryService.JobProfileNotFoundException e) {
+    public ResponseEntity<ErrorResponse> handleJobProfileNotFound(JobQueryService.JobProfileNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("JOB_PROFILE_NOT_FOUND", e.getMessage()));
+                .body(ErrorResponse.of("JOB_PROFILE_NOT_READY", "해당 직무의 프로필이 아직 준비되지 않았습니다.", requestId()));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e) {
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
         log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("INTERNAL_ERROR", "서버 오류가 발생했습니다."));
+                .body(ErrorResponse.of("INTERNAL_ERROR", "서버 오류가 발생했습니다.", requestId()));
     }
 }

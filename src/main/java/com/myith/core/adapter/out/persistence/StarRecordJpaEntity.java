@@ -2,6 +2,8 @@ package com.myith.core.adapter.out.persistence;
 
 import com.myith.core.domain.star.StarRecord;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -36,8 +38,9 @@ public class StarRecordJpaEntity {
     @Column(length = 20)
     private String completeness;
 
+    @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "VARCHAR[]")
-    private String tags;
+    private String[] tags;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -60,15 +63,15 @@ public class StarRecordJpaEntity {
         e.action = record.getAction();
         e.result = record.getResult();
         e.completeness = record.getCompleteness();
-        e.tags = record.getTags() != null ? String.join(",", record.getTags()) : null;
+        e.tags = record.getTags() != null ? record.getTags().toArray(new String[0]) : null;
         e.createdAt = record.getCreatedAt();
         e.updatedAt = record.getUpdatedAt();
         return e;
     }
 
     public StarRecord toDomain() {
-        List<String> tagList = tags != null && !tags.isBlank()
-                ? Arrays.asList(tags.split(",")) : null;
+        List<String> tagList = tags != null && tags.length > 0
+                ? Arrays.asList(tags) : null;
         return StarRecord.restore(id, questId, userId, situation, task, action, result,
                 completeness, tagList, createdAt, updatedAt);
     }

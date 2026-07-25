@@ -1,20 +1,23 @@
 package com.myith.core.config;
 
 import com.myith.core.domain.dashboard.*;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 
 @Configuration
+@EnableConfigurationProperties(DomainPolicyConfig.GrowthStageProperties.class)
 public class DomainPolicyConfig {
 
+    @ConfigurationProperties(prefix = "policy.growth-stage")
+    public record GrowthStageProperties(List<Integer> boundaries, List<String> names) {}
+
     @Bean
-    public GrowthStagePolicy growthStagePolicy(
-            @Value("${policy.growth-stage.boundaries}") List<Integer> boundaries,
-            @Value("${policy.growth-stage.names}") List<String> names) {
-        return new DefaultGrowthStagePolicy(boundaries, names);
+    public GrowthStagePolicy growthStagePolicy(GrowthStageProperties props) {
+        return new DefaultGrowthStagePolicy(props.boundaries(), props.names());
     }
 
     @Bean

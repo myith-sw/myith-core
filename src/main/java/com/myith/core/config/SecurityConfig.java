@@ -26,9 +26,11 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/health",
+                                "/api/health",
                                 "/api/auth/**",
                                 "/api-docs/**",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
