@@ -497,8 +497,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: rmp_01J3ABC
       responses:
         '200':
           description: SSE 스트림
@@ -530,8 +530,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: rmp_01J3ABC
       responses:
         '200':
           description: 조회 성공
@@ -578,8 +578,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: rmp_01J3ABC
       requestBody:
         required: true
         content:
@@ -632,8 +632,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: rmp_01J3ABC
       requestBody:
         required: true
         content:
@@ -681,8 +681,8 @@ paths:
       operationId: deleteQuest
       description: source가 CUSTOM인 사용자 정의 퀘스트만 삭제할 수 있다.
       parameters:
-        - { name: roadmapId, in: path, required: true, schema: { type: integer, format: int64 } }
-        - { name: questId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: roadmapId, in: path, required: true, schema: { type: string }, example: rmp_01J3ABC }
+        - { name: questId, in: path, required: true, schema: { type: string }, example: qst_99 }
       responses:
         '204':
           description: 삭제 성공
@@ -714,8 +714,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: qst_05
       responses:
         '200':
           description: 조회 성공
@@ -764,8 +764,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: qst_05
       requestBody:
         required: true
         content:
@@ -816,7 +816,7 @@ paths:
         409 VERSION_CONFLICT 응답에는 최신 version을 포함해 프론트가 재시도할 수 있게 한다.
       parameters:
         - { name: Idempotency-Key, in: header, description: "멱등성 키 (optional)", required: false, schema: { type: string } }
-        - { name: questId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: questId, in: path, required: true, schema: { type: string }, example: qst_05 }
       requestBody:
         required: true
         content:
@@ -882,8 +882,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: qst_05
       requestBody:
         required: true
         content:
@@ -1001,8 +1001,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
+            type: string
+          example: rmp_01J3ABC
       responses:
         '200':
           description: 조회 성공
@@ -1104,7 +1104,7 @@ paths:
         format=pdf: 원본 STAR 열람용 PDF (Content-Type: application/pdf, 한글 폰트 임베딩).
         대상: 해당 로드맵의 star IS NOT NULL인 경험 카드 전체(완성도 무관).
       parameters:
-        - { name: roadmapId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: roadmapId, in: path, required: true, schema: { type: string }, example: rmp_01J3ABC }
         - name: format
           in: query
           description: "내보내기 형식. md(자소서 프롬프트) 또는 pdf(원본 STAR)"
@@ -1317,6 +1317,7 @@ components:
           type: string
         status:
           $ref: '#/components/schemas/QuestStatus'
+          description: "화면 4-1 카드 상태(잠금 자물쇠/완료/이미보유 뱃지)"
         source:
           $ref: '#/components/schemas/QuestSource'
         order:
@@ -1492,13 +1493,15 @@ components:
           type: string
         tagline:
           type: string
+          description: "화면 2 직무 카드 설명문, 로드맵 상세 상단"
         keywords:
           type: array
           items:
             type: string
-          description: "job_profile 분야 축 상위 5개. 프로필 없으면 빈 배열"
+          description: "화면 2 직무 카드 하단 키워드 5개. 프로필 없으면 빈 배열"
         available:
           type: boolean
+          description: "false면 화면 2에서 '준비중' 잠긴 카드"
     DiagnosisResponse:
       type: object
       properties:
@@ -1548,14 +1551,16 @@ components:
           type: string
         species:
           type: string
-          description: "캐릭터 종류. enum이 아닌 자유 문자열"
+          description: "캐릭터 종류. enum이 아닌 자유 문자열. 이미지 파일명 {species}-{stage}.png에 사용"
         nickname:
           type: string
+          description: "홈 화면(1-2) 카드 큰 제목, 사이드바 첫 줄"
         jobCode:
           type: string
           description: "직무 코드. enum이 아닌 자유 문자열"
         jobName:
           type: string
+          description: "홈 화면 카드 작은 글씨, 로드맵 상세 상단"
         tagline:
           type: string
         roadmapStatus:
@@ -1669,9 +1674,11 @@ components:
           type: integer
           minimum: 1
           maximum: 4
+          description: "캐릭터 이미지 파일명 숫자. {species}-{stage}.png"
         stageLabel:
           type: string
           enum: [시작, 성장, 숙련, 완성]
+          description: "캐릭터 옆 텍스트 (시작/성장/숙련/완성)"
         completionRate:
           type: integer
 
@@ -1692,8 +1699,9 @@ components:
       required: [questId, targetLevel, targetIndex, version]
       properties:
         questId:
-          type: integer
-          format: int64
+          type: string
+          description: 이동할 퀘스트 ID
+          example: qst_02
         targetLevel:
           type: integer
         targetIndex:
@@ -1730,18 +1738,24 @@ components:
         completionCriteria:
           type: string
           nullable: true
+          description: "화면 4-2 '완료 기준' 박스"
         ncsUnit:
           $ref: '#/components/schemas/NcsUnit'
+          description: "화면 4-2 'NCS 능력단위 근거' 박스. null이면 섹션 숨김"
         certifications:
           type: array
           items:
             $ref: '#/components/schemas/CertItem'
+          description: "화면 4-2 '추천 자격'. 빈 배열이면 '해당 없음'"
         star:
-          $ref: '#/components/schemas/StarInput'
-          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/StarInput'
+            - type: 'null'
+          description: "화면 4-2 STAR 입력칸 초기값. 아직 작성 전이면 null"
         starSource:
-          $ref: '#/components/schemas/StarSource'
-          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/StarSource'
+            - type: 'null'
         updatedAt:
           type: string
           format: date-time
@@ -1841,16 +1855,20 @@ components:
         status:
           $ref: '#/components/schemas/AiRequestStatus'
         enhancedStar:
-          $ref: '#/components/schemas/StarInput'
-          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/StarInput'
+            - type: 'null'
+          description: "화면 4-2 AI 비교 모달 오른쪽. status가 PROCESSING이면 아직 없음"
         feedback:
           type: array
           nullable: true
           items:
             $ref: '#/components/schemas/FeedbackEntry'
+          description: "화면 4-2 항목별 개선 힌트"
         resumeDraft:
           type: string
           nullable: true
+          description: "화면 4-2·5 자기소개서 초안 영역"
         errorCode:
           type: string
           nullable: true
@@ -1870,6 +1888,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AxisItem'
+          description: "화면 5 역량 다각형(레이더). 축 개수는 직무마다 4~7개 가변"
         skillTree:
           type: array
           items:
@@ -1878,6 +1897,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExperienceCard'
+          description: "화면 5 경험 카드 목록"
         updatedAt:
           type: string
           format: date-time
