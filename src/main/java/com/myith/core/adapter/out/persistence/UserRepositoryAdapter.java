@@ -4,6 +4,8 @@ import com.myith.core.application.port.UserRepository;
 import com.myith.core.domain.user.User;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -35,5 +37,12 @@ public class UserRepositoryAdapter implements UserRepository {
     @Override
     public Optional<User> findByEmail(String email) {
         return jpaRepository.findByEmailAndDeletedAtIsNull(email).map(UserJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<User> findInactiveUsers(Instant activityCutoff, Instant nudgeCutoff) {
+        return jpaRepository.findInactiveUsers(activityCutoff, nudgeCutoff).stream()
+                .map(UserJpaEntity::toDomain)
+                .toList();
     }
 }

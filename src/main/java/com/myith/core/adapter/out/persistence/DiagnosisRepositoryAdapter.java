@@ -24,4 +24,11 @@ public class DiagnosisRepositoryAdapter implements DiagnosisRepository {
                 .map(DiagnosisJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<UserDiagnosis> findByRoadmapId(Long roadmapId) {
+        return jpaRepository.findByRoadmapId(roadmapId).stream()
+                .map(DiagnosisJpaEntity::toDomain)
+                .toList();
+    }
 }

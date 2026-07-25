@@ -5,6 +5,7 @@ import com.myith.core.domain.roadmap.Roadmap;
 import com.myith.core.domain.roadmap.RoadmapStatus;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,6 +43,14 @@ public class RoadmapRepositoryAdapter implements RoadmapRepository {
     @Override
     public List<Roadmap> findActiveByUserId(Long userId) {
         return jpaRepository.findByUserIdAndStatusAndDeletedAtIsNull(userId, RoadmapStatus.ACTIVE.name())
+                .stream()
+                .map(RoadmapJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Roadmap> findStuckAnalyzing(Instant cutoff) {
+        return jpaRepository.findByGenerationStateAndUpdatedAtBefore("ANALYZING", cutoff)
                 .stream()
                 .map(RoadmapJpaEntity::toDomain)
                 .toList();
