@@ -504,7 +504,8 @@ public class RoadmapController {
             String axisName,
             @Schema(description = "레벨", example = "3")
             int level,
-            @Schema(description = "상태", example = "OPEN")
+            @Schema(description = "상태", example = "OPEN",
+                    allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"})
             String status,
             @Schema(description = "소스", example = "CUSTOM")
             String source,

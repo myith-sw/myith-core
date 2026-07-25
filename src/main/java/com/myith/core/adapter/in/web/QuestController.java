@@ -352,7 +352,8 @@ public class QuestController {
             @Schema(description = "퀘스트 ID", example = "qst_05") String questId,
             @Schema(description = "저장된 STAR 기록") StarInput star,
             @Schema(description = "출처", example = "manual") String source,
-            @Schema(description = "퀘스트 상태. 최초 저장 시 OPEN → PENDING", example = "PENDING") String status,
+            @Schema(description = "퀘스트 상태. 최초 저장 시 OPEN → PENDING", example = "PENDING",
+                    allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = "수정 시각", example = "2026-07-24T03:10:00Z") String updatedAt
     ) {}
 

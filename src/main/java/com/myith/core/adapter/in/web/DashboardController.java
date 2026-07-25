@@ -222,6 +222,7 @@ public class DashboardController {
             @Schema(description = "퀘스트 제목", example = "버전관리로 협업한다") String title,
             @Schema(description = "역량 축 코드", example = "collaboration") String axisCode,
             @Schema(description = "역량 축 이름", example = "협업·형상관리") String axisName,
-            @Schema(description = "상태", example = "DONE") String status
+            @Schema(description = "상태", example = "DONE",
+                    allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status
     ) {}
 }
