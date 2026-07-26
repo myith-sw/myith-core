@@ -87,6 +87,13 @@ policy:
     max-retries: ${OUTBOX_MAX_RETRIES:5}
   messaging:
     core-exchange: ${CORE_EXCHANGE:myith.core.events}
+  roadmap:
+    max-experiences: ${ROADMAP_MAX_EXPERIENCES:3}
+  ai-enhancement:
+    result-ttl-minutes: ${AI_ENHANCEMENT_TTL:30}
+  collect:
+    cron: ${COLLECT_CRON:0 0 4 * * MON}
+    enabled: ${COLLECT_ENABLED:true}
   consistency:
     max-retries: ${CONSISTENCY_MAX_RETRIES:3}
   analysis:

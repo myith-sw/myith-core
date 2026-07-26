@@ -236,7 +236,7 @@ public class DashboardController {
                     퀘스트 상태입니다.
                     LOCKED: 선행 퀘스트 미완료로 잠긴 상태.
                     OPEN: 수행 가능.
-                    PENDING: STAR 피드백 대기 중.
+                    PENDING: STAR 기록이 작성되었으나 완료 처리되지 않은 상태.
                     DONE: 완료.
                     ALREADY_KNOWN: 사전 역량 보유(자가진단 mastery ≥ 0.66)로 자동 완료 처리됩니다. 접힌 상태로 표시하세요.""",
                     example = "DONE",

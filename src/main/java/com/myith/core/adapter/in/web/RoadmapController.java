@@ -198,24 +198,26 @@ public class RoadmapController {
             @AuthenticationPrincipal Long userId,
             @PathVariable String roadmapId) {
         RoadmapQueryService.RoadmapDetailDto dto = roadmapQueryService.getDetail(userId, IdCodec.decode(roadmapId));
-        RoadmapDetailResponse response = new RoadmapDetailResponse(
-                "rmp_" + dto.roadmapId(), dto.generationState(), "ACTIVE",
-                "server", dto.jobName(), dto.tagline(),
-                new RoadmapCharacterResponse(
-                        "chr_01J3ABC",
+        RoadmapCharacterResponse charResponse = dto.character() != null
+                ? new RoadmapCharacterResponse(
+                        "chr_" + dto.character().characterId(),
                         dto.character().species(), dto.character().nickname(),
-                        4, "완성",
-                        dto.character().completionRate() != null ? dto.character().completionRate().intValue() : 0
-                ),
+                        dto.character().stageNumber(), dto.character().stageLabel(),
+                        dto.character().completionRate() != null ? dto.character().completionRate().intValue() : 0)
+                : null;
+        RoadmapDetailResponse response = new RoadmapDetailResponse(
+                "rmp_" + dto.roadmapId(), dto.generationState(), dto.roadmapStatus(),
+                dto.jobCode(), dto.jobName(), dto.tagline(),
+                charResponse,
                 dto.levels().stream().map(l -> new RoadmapLevelResponse(
                         l.level(),
                         l.quests().stream().map(q -> new RoadmapQuestResponse(
                                 "qst_" + q.questId(), q.title(),
-                                "collaboration", q.axisName(),
-                                q.status(), q.source(), 1, 0
+                                q.axisCode(), q.axisName(),
+                                q.status(), q.source(), q.order(), q.version()
                         )).toList()
                 )).toList(),
-                null
+                dto.updatedAt()
         );
         return ResponseEntity.ok(ApiResponse.of(response));
     }
@@ -346,8 +348,8 @@ public class RoadmapController {
                 l.level(),
                 l.quests().stream().map(q -> new RoadmapQuestResponse(
                         "qst_" + q.questId(), q.title(),
-                        "collaboration", q.axisName(),
-                        q.status(), q.source(), 1, 0
+                        q.axisCode(), q.axisName(),
+                        q.status(), q.source(), q.order(), q.version()
                 )).toList()
         )).toList();
         return ResponseEntity.ok(ApiResponse.of(new ReorderResponse(levels)));
@@ -400,8 +402,8 @@ public class RoadmapController {
             @NotEmpty List<AnswerRequest> answers,
             @Schema(description = "자기 평가 서술(강점·어려움)입니다. 이 필드나 experiences 중 하나라도 있으면 202 비동기 분석으로 처리됩니다.")
             NarrativeRequest narrative,
-            @Schema(description = "프로젝트 경험 카드 목록입니다. 있으면 202 비동기 분석으로 처리됩니다. 카드별로 서술·링크·파일을 각각 전달합니다.")
-            List<ExperienceRequest> experiences
+            @Schema(description = "프로젝트 경험 카드 목록입니다. 있으면 202 비동기 분석으로 처리됩니다. 카드별로 서술·링크·파일을 각각 전달합니다. 최대 3개")
+            @Size(max = 3, message = "경험 카드는 최대 3개까지 등록할 수 있습니다.") List<ExperienceRequest> experiences
     ) {}
 
     @Schema(name = "AnswerRequest")

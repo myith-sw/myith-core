@@ -72,8 +72,10 @@ public class RoadmapQueryService {
                 .collect(Collectors.groupingBy(Quest::getLevel, LinkedHashMap::new,
                         Collectors.mapping(q -> new QuestDto(
                                 q.getId(), q.getTitle(),
+                                q.getAxisCode(),
                                 axisNameMap.getOrDefault(q.getAxisCode(), q.getAxisCode()),
-                                q.getStatus().name(), q.getSource().name()
+                                q.getStatus().name(), q.getSource().name(),
+                                q.getOrderInLevel(), q.getVersion()
                         ), Collectors.toList())));
 
         List<LevelDto> levels = byLevel.entrySet().stream()
@@ -81,13 +83,19 @@ public class RoadmapQueryService {
                 .toList();
 
         CharacterDto charDto = null;
-        if (character != null && snapshot != null) {
-            charDto = new CharacterDto(character.getSpecies(), character.getNickname(),
-                    snapshot.stage(), snapshot.completionRate());
+        if (character != null) {
+            BigDecimal completionRate = snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO;
+            String stageLabel = snapshot != null ? snapshot.stage() : stagePolicy.initialStage();
+            int stageNumber = stageToNumber(stageLabel);
+            charDto = new CharacterDto(character.getId(), character.getSpecies(), character.getNickname(),
+                    stageNumber, stageLabel, completionRate);
         }
 
-        return new RoadmapDetailDto(roadmapId, jobName, tagline,
-                roadmap.getGenerationState().name(), charDto, levels);
+        String updatedAt = roadmap.getUpdatedAt() != null ? roadmap.getUpdatedAt().toString() : null;
+
+        return new RoadmapDetailDto(roadmapId, roadmap.getJobCode(), jobName, tagline,
+                roadmap.getGenerationState().name(), roadmap.getStatus().name(),
+                charDto, levels, updatedAt);
     }
 
     public List<CharacterListDto> getCharacters(Long userId) {
@@ -145,6 +153,15 @@ public class RoadmapQueryService {
                 }).orElse(Collections.emptyMap());
     }
 
+    private static int stageToNumber(String stageLabel) {
+        return switch (stageLabel) {
+            case "성장" -> 2;
+            case "숙련" -> 3;
+            case "완성" -> 4;
+            default -> 1; // "시작"
+        };
+    }
+
     public static void validateOwnership(Roadmap roadmap, Long userId) {
         if (!roadmap.getUserId().equals(userId)) {
             throw new RoadmapAccessDeniedException(roadmap.getId());
@@ -152,12 +169,16 @@ public class RoadmapQueryService {
     }
 
     // ===== DTOs =====
-    public record RoadmapDetailDto(Long roadmapId, String jobName, String tagline,
-                                   String generationState, CharacterDto character,
-                                   List<LevelDto> levels) {}
-    public record CharacterDto(String species, String nickname, String stage, BigDecimal completionRate) {}
+    public record RoadmapDetailDto(Long roadmapId, String jobCode, String jobName, String tagline,
+                                   String generationState, String roadmapStatus,
+                                   CharacterDto character, List<LevelDto> levels,
+                                   String updatedAt) {}
+    public record CharacterDto(Long characterId, String species, String nickname,
+                               int stageNumber, String stageLabel,
+                               BigDecimal completionRate) {}
     public record LevelDto(int level, List<QuestDto> quests) {}
-    public record QuestDto(Long questId, String title, String axisName, String status, String source) {}
+    public record QuestDto(Long questId, String title, String axisCode, String axisName,
+                           String status, String source, int order, long version) {}
 
     public record CharacterListDto(Long characterId, Long roadmapId, String species, String nickname,
                                    String jobCode, String jobName, String tagline,

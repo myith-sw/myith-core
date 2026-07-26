@@ -40,4 +40,9 @@ public class CharacterRepositoryAdapter implements CharacterRepository {
         return jpaRepository.findByRoadmapIdAndDeletedAtIsNull(roadmapId)
                 .map(CharacterJpaEntity::toDomain);
     }
+
+    @Override
+    public void softDeleteByUserId(Long userId) {
+        jpaRepository.softDeleteByUserId(userId);
+    }
 }

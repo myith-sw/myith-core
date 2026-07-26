@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myith.core.application.port.*;
 import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
+import com.myith.core.domain.roadmap.MasteryMerger.CompetencyEntry;
 import com.myith.core.domain.character.Character;
 import com.myith.core.domain.dashboard.*;
 import com.myith.core.domain.diagnosis.UserDiagnosis;
@@ -26,10 +27,12 @@ public class RoadmapCreateService {
     private final DashboardSnapshotRepository snapshotRepository;
     private final OutboxRepository outboxRepository;
     private final JobProfileReadRepository jobProfileRepository;
+    private final UserCompetencyReadRepository userCompetencyReadRepository;
     private final ObjectMapper objectMapper;
     private final GrowthStagePolicy stagePolicy;
     private final AxisAggregator axisAggregator;
     private final BigDecimal alreadyKnownThreshold;
+    private final int maxExperiences;
 
     public RoadmapCreateService(RoadmapRepository roadmapRepository,
                                 CharacterRepository characterRepository,
@@ -38,10 +41,12 @@ public class RoadmapCreateService {
                                 DashboardSnapshotRepository snapshotRepository,
                                 OutboxRepository outboxRepository,
                                 JobProfileReadRepository jobProfileRepository,
+                                UserCompetencyReadRepository userCompetencyReadRepository,
                                 ObjectMapper objectMapper,
                                 GrowthStagePolicy stagePolicy,
                                 AxisAggregator axisAggregator,
-                                @Value("${policy.mastery.already-known-threshold}") BigDecimal alreadyKnownThreshold) {
+                                @Value("${policy.mastery.already-known-threshold}") BigDecimal alreadyKnownThreshold,
+                                @Value("${policy.roadmap.max-experiences}") int maxExperiences) {
         this.roadmapRepository = roadmapRepository;
         this.characterRepository = characterRepository;
         this.questRepository = questRepository;
@@ -49,14 +54,21 @@ public class RoadmapCreateService {
         this.snapshotRepository = snapshotRepository;
         this.outboxRepository = outboxRepository;
         this.jobProfileRepository = jobProfileRepository;
+        this.userCompetencyReadRepository = userCompetencyReadRepository;
         this.objectMapper = objectMapper;
         this.stagePolicy = stagePolicy;
         this.axisAggregator = axisAggregator;
         this.alreadyKnownThreshold = alreadyKnownThreshold;
+        this.maxExperiences = maxExperiences;
     }
 
     @Transactional
     public CreateResult create(Long userId, CreateCommand cmd) {
+        // 0. experiences 상한 검증
+        if (cmd.experiences() != null && cmd.experiences().size() > maxExperiences) {
+            throw new ExperiencesLimitExceededException(maxExperiences);
+        }
+
         // 1. job_profile 조회
         JobProfileData profile = jobProfileRepository
                 .findByJobCodeAndVersion(cmd.jobCode(), cmd.profileVersion())
@@ -81,7 +93,7 @@ public class RoadmapCreateService {
 
         GenerationState initialState = hasNarrative ? GenerationState.ANALYZING : GenerationState.READY;
 
-        // 5. 로드맵·캐릭터·자가진단을 단일 트랜잭션으로 생성
+        // 5. 로드맵, 캐릭터, 자가진단을 단일 트랜잭션으로 생성
         Roadmap roadmap = roadmapRepository.save(
                 Roadmap.create(userId, cmd.jobCode(), cmd.profileVersion(), initialState));
         Long roadmapId = roadmap.getId();
@@ -94,11 +106,11 @@ public class RoadmapCreateService {
                 .toList();
         diagnosisRepository.saveAll(diagnoses);
 
-        // 6. 선택형만 → 즉시 조립
+        // 6. 선택형만 -> 즉시 조립
         if (!hasNarrative) {
             assembleAndSnapshot(roadmap, profile, cmd.answers());
         } else {
-            // 비정형 → Outbox 이벤트 발행, Worker에 위임
+            // 비정형 -> Outbox 이벤트 발행, Worker에 위임
             publishRoadmapGenerationEvent(roadmap, cmd);
             // 빈 스냅샷 초기화 (조립 전이라도 조회 가능하도록)
             String initial = stagePolicy.initialStage();
@@ -119,17 +131,19 @@ public class RoadmapCreateService {
                 profile.skills(), profile.levels(), profile.prerequisites(),
                 profile.questTemplates(), profile.activityQuests());
 
-        // 자가진단 → Map
+        // 자가진단 -> Map
         Map<String, BigDecimal> selfAssessment = new HashMap<>();
         for (AnswerDto a : answers) {
             selfAssessment.put(a.skillCode(), a.mastery());
         }
 
-        // TODO: user_competency 조회 (Worker 연동 후). 지금은 null
-        // HANDOFF(worker): CompetencyExtracted 수신 후 여기에 aiAssessment를 넘긴다.
+        // user_competency 조회 (비어있으면 null 전달 -> 자가진단만 사용)
+        Map<String, CompetencyEntry> aiAssessment = userCompetencyReadRepository.findByRoadmapId(roadmap.getId());
+        Map<String, CompetencyEntry> aiParam = aiAssessment.isEmpty() ? null : aiAssessment;
 
         List<Quest> quests = RoadmapAssembler.assemble(
-                roadmap.getId(), profileData, selfAssessment, null, alreadyKnownThreshold);
+                roadmap.getId(), profileData, selfAssessment, aiParam,
+                alreadyKnownThreshold);
 
         questRepository.saveAll(quests);
 
@@ -191,6 +205,12 @@ public class RoadmapCreateService {
     public static class DuplicateSpeciesException extends RuntimeException {
         public DuplicateSpeciesException(String species) {
             super("Species already owned: " + species);
+        }
+    }
+
+    public static class ExperiencesLimitExceededException extends RuntimeException {
+        public ExperiencesLimitExceededException(int max) {
+            super("경험 카드는 최대 " + max + "개까지 등록할 수 있습니다.");
         }
     }
 }

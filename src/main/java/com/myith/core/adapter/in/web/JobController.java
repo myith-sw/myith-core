@@ -79,6 +79,40 @@ public class JobController {
         )));
     }
 
+    // ────────────────── GET /api/jobs/{jobCode}/axes ──────────────────
+
+    @Operation(
+            summary = "직무별 역량 축 조회",
+            description = """
+                    해당 직무의 역량 축(레이더 차트 축) 목록을 반환합니다.
+                    백엔드 개발자의 경우 6각형(프로그래밍기초, CS·자료구조, 데이터입출력, 서버·API, 협업·형상관리, 배포·운영)이 됩니다.
+                    화면에서 레이더 차트의 n각형 축을 구성할 때 사용하세요."""
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
+            content = @Content(mediaType = "application/json",
+                    examples = @ExampleObject(value = """
+                            {
+                              "data": {
+                                "jobCode": "backend",
+                                "axes": [
+                                  { "axisCode": "programming", "axisName": "프로그래밍기초" },
+                                  { "axisCode": "cs", "axisName": "CS·자료구조" },
+                                  { "axisCode": "data-io", "axisName": "데이터입출력" },
+                                  { "axisCode": "server-api", "axisName": "서버·API" },
+                                  { "axisCode": "collab", "axisName": "협업·형상관리" },
+                                  { "axisCode": "devops", "axisName": "배포·운영" }
+                                ]
+                              }
+                            }""")))
+    @GetMapping("/{jobCode}/axes")
+    public ResponseEntity<ApiResponse<AxesResponse>> getAxes(@PathVariable String jobCode) {
+        List<JobQueryService.AxisDto> axes = jobQueryService.getAxes(jobCode);
+        return ResponseEntity.ok(ApiResponse.of(new AxesResponse(
+                jobCode,
+                axes.stream().map(a -> new AxisResponse(a.axisCode(), a.axisName())).toList()
+        )));
+    }
+
     @Operation(
             summary = "자가진단 문항 조회",
             description = """
@@ -210,6 +244,18 @@ public class JobController {
             String axisName,
             @Schema(description = "화면 3 문항 정렬 순서입니다.", example = "1")
             int sortOrder
+    ) {}
+
+    @Schema(name = "AxesResponse")
+    record AxesResponse(
+            @Schema(description = "직무 코드", example = "backend") String jobCode,
+            @Schema(description = "역량 축 목록. 레이더 차트의 n각형 축으로 사용합니다.") List<AxisResponse> axes
+    ) {}
+
+    @Schema(name = "AxisResponse")
+    record AxisResponse(
+            @Schema(description = "역량 축 코드", example = "programming") String axisCode,
+            @Schema(description = "역량 축 이름. 레이더 차트 축 레이블로 사용합니다.", example = "프로그래밍기초") String axisName
     ) {}
 
     @Schema(name = "DiagnosisLevelResponse")

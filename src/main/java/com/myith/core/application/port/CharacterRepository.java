@@ -10,4 +10,5 @@ public interface CharacterRepository {
     List<String> findSpeciesByUserId(Long userId);
     List<Character> findByUserId(Long userId);
     Optional<Character> findByRoadmapId(Long roadmapId);
+    void softDeleteByUserId(Long userId);
 }

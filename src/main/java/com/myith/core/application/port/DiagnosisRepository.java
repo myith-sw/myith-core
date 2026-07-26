@@ -7,4 +7,5 @@ import java.util.List;
 public interface DiagnosisRepository {
     List<UserDiagnosis> saveAll(List<UserDiagnosis> diagnoses);
     List<UserDiagnosis> findByRoadmapId(Long roadmapId);
+    void deleteByRoadmapIds(List<Long> roadmapIds);
 }

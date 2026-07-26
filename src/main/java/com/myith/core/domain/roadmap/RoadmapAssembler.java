@@ -13,8 +13,8 @@ import java.util.stream.Collectors;
  *   1. 선후관계 위상정렬 (하드 제약)
  *   2. job_profile Lv 밴드에 퀘스트 배치
  *   3. 같은 레벨 내 Priority 내림차순 정렬
- *   4. M ≥ 0.66 → ALREADY_KNOWN
- *   5. 선행 퀘스트 미완료 → LOCKED, 그 외 OPEN
+ *   4. M >= 0.66 -> ALREADY_KNOWN
+ *   5. 선행 퀘스트 미완료 -> LOCKED, 그 외 OPEN
  */
 public class RoadmapAssembler {
 
@@ -81,8 +81,8 @@ public class RoadmapAssembler {
             }
         }
 
-        // 5. 선행 퀘스트가 미완료인 퀘스트 → LOCKED
-        applyPrerequisiteLocks(quests, profile.prerequisites());
+        // 5. 선행 퀘스트 미완료 OR 레벨 해금 미충족 -> LOCKED
+        applyUnlockRules(quests, profile.prerequisites());
 
         return quests;
     }
@@ -94,37 +94,54 @@ public class RoadmapAssembler {
         return QuestStatus.OPEN;
     }
 
-    private static void applyPrerequisiteLocks(List<Quest> quests, List<Prerequisite> prerequisites) {
-        // skillCode → Quest 매핑
-        Map<String, Quest> questBySkill = quests.stream()
-                .filter(q -> q.getSkillCode() != null)
-                .collect(Collectors.toMap(Quest::getSkillCode, q -> q, (a, b) -> a));
+    private static void applyUnlockRules(List<Quest> quests, List<Prerequisite> prerequisites) {
+        // 최소 레벨 찾기
+        int minLevel = quests.stream().mapToInt(Quest::getLevel).min().orElse(1);
 
-        // 선후관계별로 선행 퀘스트가 완료가 아니면 후행 퀘스트를 LOCKED
-        for (Prerequisite prereq : prerequisites) {
-            Quest fromQuest = questBySkill.get(prereq.from());
-            Quest toQuest = questBySkill.get(prereq.to());
+        // 레벨별 전체 수 + 완료 수 집계
+        Map<Integer, Long> totalPerLevel = quests.stream()
+                .collect(Collectors.groupingBy(Quest::getLevel, Collectors.counting()));
+        Map<Integer, Long> completedPerLevel = quests.stream()
+                .collect(Collectors.groupingBy(Quest::getLevel,
+                        Collectors.filtering(q -> q.getStatus().isCompleted(), Collectors.counting())));
 
-            if (fromQuest == null || toQuest == null) continue;
+        // skillCode -> 선행으로 필요한 스킬 목록
+        Map<String, Set<String>> prereqMap = new HashMap<>();
+        for (Prerequisite p : prerequisites) {
+            prereqMap.computeIfAbsent(p.to(), k -> new HashSet<>()).add(p.from());
+        }
 
-            if (!fromQuest.getStatus().isCompleted()) {
-                // 후행 퀘스트가 ALREADY_KNOWN이 아닌 경우에만 LOCKED 적용
-                if (toQuest.getStatus() != QuestStatus.ALREADY_KNOWN) {
-                    // 새 Quest를 만들어 교체해야 하므로 restore 사용
-                    Quest locked = Quest.createSkillQuest(
-                            toQuest.getRoadmapId(),
-                            toQuest.getSkillCode(),
-                            toQuest.getAxisCode(),
-                            toQuest.getLevel(),
-                            toQuest.getOrderInLevel(),
-                            toQuest.getTitle(),
-                            toQuest.getCompletionCriteria(),
-                            toQuest.getNcsUnitCode(),
-                            QuestStatus.LOCKED
-                    );
-                    int idx = quests.indexOf(toQuest);
-                    if (idx >= 0) quests.set(idx, locked);
-                }
+        // 현재 완료된 스킬 목록
+        Set<String> completedSkills = quests.stream()
+                .filter(q -> q.getSkillCode() != null && q.getStatus().isCompleted())
+                .map(Quest::getSkillCode)
+                .collect(Collectors.toSet());
+
+        for (int i = 0; i < quests.size(); i++) {
+            Quest q = quests.get(i);
+            // ALREADY_KNOWN은 건드리지 않는다
+            if (q.getStatus() == QuestStatus.ALREADY_KNOWN) continue;
+
+            // 레벨 해금: 이전 레벨 전부 완료해야 다음 레벨 해금
+            boolean levelUnlocked = q.getLevel() <= minLevel
+                    || completedPerLevel.getOrDefault(q.getLevel() - 1, 0L)
+                       >= totalPerLevel.getOrDefault(q.getLevel() - 1, 0L);
+
+            // 선행 충족 확인
+            boolean prereqSatisfied = true;
+            if (q.getSkillCode() != null) {
+                Set<String> required = prereqMap.getOrDefault(q.getSkillCode(), Set.of());
+                prereqSatisfied = completedSkills.containsAll(required);
+            }
+
+            if (!levelUnlocked || !prereqSatisfied) {
+                Quest locked = Quest.createSkillQuest(
+                        q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
+                        q.getLevel(), q.getOrderInLevel(), q.getTitle(),
+                        q.getCompletionCriteria(), q.getNcsUnitCode(),
+                        QuestStatus.LOCKED
+                );
+                quests.set(i, locked);
             }
         }
     }

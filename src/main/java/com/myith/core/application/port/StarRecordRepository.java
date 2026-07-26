@@ -9,4 +9,5 @@ public interface StarRecordRepository {
     StarRecord save(StarRecord record);
     Optional<StarRecord> findByQuestId(Long questId);
     List<StarRecord> findByCursor(Long userId, Long cursor, String completeness, int size);
+    void softDeleteByUserId(Long userId);
 }

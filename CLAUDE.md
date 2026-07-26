@@ -76,8 +76,9 @@ com.myith.core
 **C-2.** Core는 파일을 처리하지 않는다. 파일 키(문자열)만 다룬다. S3 Presigned URL 발급, fileKey 전달이 전부다.
 
 **C-3.** Core는 Worker 소유 테이블에 쓰지 않는다.
-- 읽기 전용: `job_profile`, `user_competency`, `ncs_unit`, `ncs_certification`, `job`
+- 읽기 전용: `job_profile`, `user_competency`, `ncs_unit`, `ncs_certification`, `job`, `skill_ncs_map`
 - 소유·쓰기: `users`, `character`, `roadmap`, `quest`, `user_diagnosis`, `star_record`, `dashboard_snapshot`, `outbox`, `processed_event`
+- **Worker 소유 테이블의 DDL은 Worker Alembic에 있다. Core Flyway에 만들지 않는다.**
 
 **C-4.** AI로 계산하지 않는다. 완료율·성장단계·우선순위·레벨 배치는 결정론적 규칙이다.
 
@@ -143,7 +144,8 @@ M ≥ 0.66 → `ALREADY_KNOWN`. 로드맵에 남되 접힌 상태, STAR 기록 �
 Priority = (1 − M) × P    // P = 시장 보편성 (job_profile)
 
 조립: 위상정렬 → Lv 밴드 배치 → 레벨 내 Priority 정렬
-     → M ≥ 0.66 ALREADY_KNOWN → 선행 미완료 LOCKED, 그 외 OPEN
+     → M ≥ 0.66 ALREADY_KNOWN
+     → 레벨 해금 + 선행관계 → LOCKED / OPEN 결정 (QuestUnlockPolicy)
 ```
 
 ## D-7. 접속 시각은 둘이다
@@ -181,6 +183,34 @@ email→'deleted_{id}@myith.local', google_id→null, nickname→'탈퇴한 사�
 ## D-13. 정합성 스케줄러
 
 매 1분: `generation_state='ANALYZING'`이고 `updated_at < now()-60초`인 로드맵을 스캔. user_competency 있으면 보정 조립, 없으면 자가진단만으로 폴백 조립, 3회 초과 시 FAILED. DB만 본다.
+
+## D-14. 레벨 해금 규칙
+
+```
+Lv1 퀘스트     : 항상 해금 후보
+Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)해야 해금 후보
+
+최종 상태 = (레벨 해금 후보) AND (선행관계 충족) → OPEN
+            그 외 → LOCKED
+```
+
+- ALREADY_KNOWN이 완료로 집계되므로 경력자는 초기 조립 시점에 여러 레벨이 자동 해금된다.
+- 재잠금: Lv N에 미완료가 생기면 Lv N+1의 미완료 퀘스트를 LOCKED로 되돌린다. DONE/ALREADY_KNOWN은 건드리지 않는다.
+- 재계산 시점: ① 초기 조립 ② 완료 토글 ③ 퀘스트 추가·삭제 ④ 순서 변경
+- 구현: `QuestUnlockPolicy.recompute()` (순수 도메인 함수)
+
+## D-15. QuestStatus 상태 전이
+
+LOCKED  --(선행 충족 + 레벨 해금)--> OPEN
+OPEN    --(STAR 저장, 1칸 이상 내용 있음)--> PENDING
+PENDING --(STAR 전부 공백)--> OPEN
+PENDING --(완료 true)--> DONE
+OPEN    --(완료 true)--> DONE
+DONE    --(완료 false)--> STAR 있으면 PENDING, 없으면 OPEN
+조립 시   M ≥ 0.66 --> ALREADY_KNOWN
+
+PENDING은 isCompleted()에 포함되지 않는다. 완료율·레이더에 영향 없음.
+PENDING은 "STAR를 썼지만 완료 처리 안 함"이다. AI 피드백 대기와 무관하다.
 
 ---
 
@@ -232,6 +262,9 @@ user_competency (roadmap_id, skill_code, mastery, evidence, confidence)
 ncs_unit (code PK, name, description, level)
 
 ncs_certification (ncs_unit_code FK, cert_code, cert_name, unit_type)
+
+skill_ncs_map (skill_code, ncs_unit_code)
+-- DDL은 Worker Alembic이 소유한다. Core Flyway에 만들지 않는다.
 ```
 
 ---
@@ -290,7 +323,8 @@ POST /api/roadmaps
   { jobCode, profileVersion, species, nickname?,
     answers:[{ skillCode, mastery }],
     narrative?:{ strength, difficulty },
-    experiences?:[{ content?, repoUrl?, fileKey? }] }
+    experiences?:[{ content?, repoUrl?, fileKey? }]   최대 3개. 초과 시 400 EXPERIENCES_LIMIT_EXCEEDED
+  }
 → 200 { roadmapId }   // 선택형만 → 즉시 조립
 → 202 { roadmapId }   // 비정형(narrative 또는 experiences 존재) → 비동기, 정합성 스케줄러가 폴백(D-13)
 
@@ -321,11 +355,11 @@ GET   /api/quests/{id}
 
 PATCH /api/quests/{id}/complete    { completed, version }
 PUT   /api/quests/{id}/star        { situation, task, action, result }
-POST  /api/star/{id}/feedback      → 202 { requestId }
-GET   /api/star/feedback/{reqId}   → { status, feedback? }
+POST  /api/quests/{id}/ai-enhancements   → 202 { requestId }
+GET   /api/ai-enhancements/{reqId}       → { status, enhancedStar?, feedback[], resumeDraft? }
 ```
 
-완료 토글 시 dashboard_snapshot 재계산. STAR 피드백은 Outbox 발행, 결과는 저장하지 않음.
+완료 토글 시 dashboard_snapshot 재계산. AI 보완은 Outbox 발행, 결과는 저장하지 않음.
 
 ## F-9. 대시보드 · 내보내기
 
@@ -362,8 +396,8 @@ POST /api/heartbeat → { nudge, characterState:{ species, stage, completionRate
   "traceId":"uuid", "occurredAt":"...", "payload":{} }
 ```
 
-발행: `RoadmapGenerationRequested`, `JobProfileBuildRequested`, `StarFeedbackRequested`
-소비: `RoadmapGenerationProgress`, `CompetencyExtracted`, `JobProfileBuilt`, `StarFeedbackCompleted`
+발행: `RoadmapGenerationRequested`, `JobProfileBuildRequested`, `AiEnhancementRequested`
+소비: `RoadmapGenerationProgress`, `CompetencyExtracted`, `JobProfileBuilt`, `AiEnhancementCompleted`
 
 ### RoadmapGenerationRequested payload
 
@@ -402,20 +436,29 @@ POST /api/heartbeat → { nudge, characterState:{ species, stage, completionRate
 
 TraceId를 MDC에 저장, RabbitMQ 헤더에 전파. 로그에 항상 포함.
 
+## ID 표기 이원화
+
+| 경계 | 표기 | 예 |
+|---|---|---|
+| REST API | 접두사 문자열 | `rmp_01J3ABC`, `qst_05` |
+| RabbitMQ payload | 숫자(Long) | `"roadmapId": 1` |
+| DB | BIGSERIAL | `1` |
+
+변환은 `IdCodec`이 API 경계에서만 수행한다.
+
+## 공통 응답 래퍼
+
+성공(단건): `{ "data": { ... } }`
+성공(목록): `{ "data": [...], "meta": { "nextCursor": "...", "hasNext": true } }`
+오류: `{ "error": { "code": "...", "message": "...", "fieldErrors": null, "requestId": "..." } }`
+예외: GET /api/health 만 래퍼 없이 평문 JSON.
+
 ---
 
 # PART H. 시드 전략
 
-Worker 없이 개발용. `src/main/resources/db/seed/`에 준비:
-
-```
-job           : backend (백엔드 개발자)
-job_profile   : 6축, 10스킬, Lv1~5, 선후관계, 8문항, 퀘스트 템플릿, 활동 퀘스트
-ncs_unit      : 6건
-ncs_certification : SQLD, 정보처리기사 등
-```
-
-이 시드만으로 전 화면이 동작해야 한다. 메시징 검증은 테스트용 스텁 발행기로.
+Worker Alembic이 시드를 적재한다. Core Flyway에 시드 SQL을 넣지 않는다.
+개발 환경에서는 Worker를 먼저 기동해 공유 테이블과 시드를 생성한 뒤 Core를 기동한다.
 
 ---
 
@@ -460,9 +503,9 @@ Worker 작업을 만나면: (1) 멈추고 (2) `docs/handoff-to-worker.md`에 기
  1. 프로젝트 셋업  (완료)
  2. 인증 — 구글 로그인·JWT, 활동 갱신 인터셉터
  3. 조회 API — 직무 목록, 자가진단 문항 + 시드 데이터
- 4. 로드맵 생성 — 트랜잭션 조립(선택형 경로), user_diagnosis
+ 4. 로드맵 생성 — 트랜잭션 조립(선택형 경로), user_diagnosis, 레벨 해금(QuestUnlockPolicy)
  5. 로드맵 조회 — 상세, 퀘스트 순서·추가·삭제
- 6. 퀘스트·STAR — 완료 토글(낙관적 락), STAR CRUD, 커서 페이지네이션
+ 6. 퀘스트·STAR — 완료 토글(낙관적 락, 레벨 재계산), STAR CRUD, AI 보완, 커서 페이지네이션
  7. 대시보드 — CQRS 스냅샷, 레이더 완료율
  8. 내보내기 — MD, PDF(한글 폰트)
  9. 메시징 — Outbox 릴레이, fanout 컨슈머, SSE
@@ -477,8 +520,4 @@ Worker 작업을 만나면: (1) 멈추고 (2) `docs/handoff-to-worker.md`에 기
 
 ## 인프라 운영
 
-"서버 켜줘/꺼줘/배포해줘" 요청 시 아래 파일을 읽고 지시를 따른다:
-
-```
-/Users/sungyoon/Desktop/sw-contest/myith-infra/myith-infra/OPS.md
-```
+인프라 관리는 `myith-infra` 저장소의 `OPS.md`를 참조한다.

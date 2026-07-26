@@ -89,10 +89,22 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("CUSTOM_QUEST_ONLY", "사용자 정의 퀘스트만 삭제할 수 있습니다.", requestId()));
     }
 
+    @ExceptionHandler(QuestManageService.QuestLockedException.class)
+    public ResponseEntity<ErrorResponse> handleQuestLocked(QuestManageService.QuestLockedException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("QUEST_LOCKED", "선행 퀘스트를 먼저 완료해주세요.", requestId()));
+    }
+
     @ExceptionHandler(QuestManageService.OptimisticLockConflictException.class)
     public ResponseEntity<ErrorResponse> handleOptimisticLock(QuestManageService.OptimisticLockConflictException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("VERSION_CONFLICT", "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.", requestId()));
+    }
+
+    @ExceptionHandler(RoadmapCreateService.ExperiencesLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleExperiencesLimit(RoadmapCreateService.ExperiencesLimitExceededException e) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("EXPERIENCES_LIMIT_EXCEEDED", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(RoadmapCreateService.DuplicateSpeciesException.class)

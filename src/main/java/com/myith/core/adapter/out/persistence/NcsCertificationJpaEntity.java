@@ -3,6 +3,7 @@ package com.myith.core.adapter.out.persistence;
 import jakarta.persistence.*;
 
 @Entity
+@org.hibernate.annotations.Immutable
 @Table(name = "ncs_certification")
 public class NcsCertificationJpaEntity {
 

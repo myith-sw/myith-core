@@ -12,4 +12,6 @@ public interface RoadmapRepository {
     List<Roadmap> findActiveByUserIdAndJobCode(Long userId, String jobCode);
     List<Roadmap> findActiveByUserId(Long userId);
     List<Roadmap> findStuckAnalyzing(Instant cutoff);
+    List<Roadmap> findByUserId(Long userId);
+    void softDeleteByUserId(Long userId);
 }

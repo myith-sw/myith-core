@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myith.core.adapter.in.sse.SseRegistry;
 import com.myith.core.adapter.out.persistence.ProcessedEventJpaRepository;
 import com.myith.core.adapter.out.persistence.ProcessedEventJpaEntity;
+import com.myith.core.application.port.AiEnhancementResultStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
@@ -30,13 +31,16 @@ public class WorkerEventConsumer {
     private final SseRegistry sseRegistry;
     private final ProcessedEventJpaRepository processedEventRepository;
     private final ObjectMapper objectMapper;
+    private final AiEnhancementResultStore aiEnhancementResultStore;
 
     public WorkerEventConsumer(SseRegistry sseRegistry,
                                ProcessedEventJpaRepository processedEventRepository,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               AiEnhancementResultStore aiEnhancementResultStore) {
         this.sseRegistry = sseRegistry;
         this.processedEventRepository = processedEventRepository;
         this.objectMapper = objectMapper;
+        this.aiEnhancementResultStore = aiEnhancementResultStore;
     }
 
     @RabbitListener(queues = "#{instanceQueue.name}")
@@ -67,6 +71,7 @@ public class WorkerEventConsumer {
                 case "CompetencyExtracted" -> handleCompetencyExtracted(eventId, roadmapId);
                 case "JobProfileBuilt" -> handleJobProfileBuilt(eventId, payload);
                 case "StarFeedbackCompleted" -> handleStarFeedback(roadmapId, payload);
+                case "AiEnhancementCompleted" -> handleAiEnhancementCompleted(eventId, payload);
                 default -> log.debug("Unknown worker event type: {}", eventType);
             }
         } catch (IOException e) {
@@ -103,6 +108,25 @@ public class WorkerEventConsumer {
         // 피드백 결과를 저장하지 않음 (F-8 스펙). SSE로 전달만.
         if (roadmapId != null && sseRegistry.hasConnection(roadmapId)) {
             sseRegistry.send(roadmapId, "starFeedback", payload.toString());
+        }
+    }
+
+    private void handleAiEnhancementCompleted(UUID eventId, JsonNode payload) {
+        processedEventRepository.save(ProcessedEventJpaEntity.create(eventId));
+
+        String requestId = payload.has("requestId") ? payload.get("requestId").asText() : null;
+        if (requestId == null) {
+            log.warn("AiEnhancementCompleted missing requestId");
+            return;
+        }
+
+        aiEnhancementResultStore.save(requestId, payload.toString(), 30);
+        log.info("AiEnhancementCompleted stored for requestId={}", requestId);
+
+        // SSE 알림
+        Long roadmapId = payload.has("roadmapId") ? payload.get("roadmapId").asLong() : null;
+        if (roadmapId != null && sseRegistry.hasConnection(roadmapId)) {
+            sseRegistry.send(roadmapId, "aiEnhancementCompleted", Map.of("requestId", requestId));
         }
     }
 }

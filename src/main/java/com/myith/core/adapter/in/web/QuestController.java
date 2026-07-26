@@ -19,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "Quest", description = "퀘스트·STAR")
 @RestController
@@ -77,8 +78,9 @@ public class QuestController {
             @PathVariable String questId) {
         QuestDetailService.QuestDetailDto dto = questDetailService.getDetail(userId, IdCodec.decode(questId));
         QuestDetailResponse response = new QuestDetailResponse(
-                "qst_" + dto.questId(), "rmp_01J3ABC", dto.level(),
-                "cs", dto.axisName(), dto.title(), dto.status(), "ACTIVITY", 1, 0,
+                "qst_" + dto.questId(), "rmp_" + dto.roadmapId(), dto.level(),
+                dto.axisCode(), dto.axisName(), dto.title(), dto.status(), dto.source(),
+                dto.order(), dto.version(),
                 dto.completionCriteria(),
                 dto.ncsUnit() != null
                         ? new NcsUnitResponse(dto.ncsUnit().code(), dto.ncsUnit().name(), dto.ncsUnit().description())
@@ -89,7 +91,7 @@ public class QuestController {
                 dto.star() != null
                         ? new StarResponse(dto.star().situation(), dto.star().task(), dto.star().action(), dto.star().result())
                         : null,
-                null, null
+                null, dto.updatedAt()
         );
         return ResponseEntity.ok(ApiResponse.of(response));
     }
@@ -225,10 +227,48 @@ public class QuestController {
             @PathVariable String questId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CompleteRequest request) {
-        questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version());
-        // 실제 구현에서는 스냅샷에서 characterChanges, radar 등을 가져와 반환한다.
-        // 문서화 목적이므로 구조만 정의한다.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        QuestDetailService.ToggleResult result =
+                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version());
+
+        CompletedQuestInfo questInfo = new CompletedQuestInfo(
+                IdCodec.encode(result.questId(), "qst_"),
+                result.newStatus().name(),
+                result.completedAt() != null ? result.completedAt().toString() : null,
+                result.newVersion()
+        );
+
+        int completionRate = result.completionRate() != null ? result.completionRate().intValue() : 0;
+        int stageNum = stageToNumber(result.stage());
+        String stageLabel = result.stage() != null ? result.stage() : "시작";
+
+        CharacterController.NextQuestResponse nextQuestResp = result.nextQuest() != null
+                ? new CharacterController.NextQuestResponse(
+                        IdCodec.encode(result.nextQuest().questId(), "qst_"),
+                        result.nextQuest().title())
+                : null;
+
+        CharacterChanges characterChanges = new CharacterChanges(
+                completionRate, stageNum, stageLabel, result.currentLevel(), nextQuestResp);
+
+        List<String> unlockedIds = result.unlockedQuestIds().stream()
+                .map(id -> IdCodec.encode(id, "qst_"))
+                .toList();
+
+        List<RadarEntry> radar = result.radar().stream()
+                .map(r -> new RadarEntry(r.axisCode(), r.axisName(), r.percent().intValue()))
+                .toList();
+
+        return ResponseEntity.ok(ApiResponse.of(new CompleteResponse(questInfo, characterChanges, unlockedIds, radar)));
+    }
+
+    private static int stageToNumber(String stage) {
+        if (stage == null) return 1;
+        return switch (stage) {
+            case "완성" -> 4;
+            case "숙련" -> 3;
+            case "성장" -> 2;
+            default -> 1;
+        };
     }
 
     // ────────────────── POST /api/quests/{questId}/ai-enhancements ──────────────────
@@ -287,8 +327,13 @@ public class QuestController {
             @AuthenticationPrincipal Long userId,
             @PathVariable String questId,
             @Valid @RequestBody AiEnhancementRequest request) {
-        // 미구현 — Outbox 발행 후 requestId를 반환
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        UUID requestId = questDetailService.requestAiEnhancement(
+                userId, IdCodec.decode(questId),
+                request.star().situation(), request.star().task(),
+                request.star().action(), request.star().result(),
+                request.locale(), request.style());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.of(new AiEnhancementAcceptedResponse("aie_" + requestId)));
     }
 
     // ── Request / Response DTOs ──

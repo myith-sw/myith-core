@@ -9,6 +9,8 @@ public interface JobReadRepository {
 
     Optional<JobData> findByJobCode(String jobCode);
 
+    List<String> findAllJobCodes();
+
     record JobData(String jobCode, String jobName, String categoryCode,
                    String categoryName, String tagline) {}
 }

@@ -1,0 +1,152 @@
+name: Deploy Core
+
+# myith-core 저장소의 .github/workflows/deploy-core.yml 로 저장한다.
+#
+# PR    -> 테스트만
+# push  -> 이미지 빌드 + ECR push + Core EC2 무중단 교체 + 헬스체크
+#
+# 인증은 OIDC 다. 액세스 키를 Secrets 에 넣지 않는다.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch: # 수동 실행 버튼
+
+permissions:
+  contents: read
+  id-token: write # OIDC 토큰 발급에 필요
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: myith-core-app
+  INSTANCE_ID: i-0f8605427dbe40c17 # Core EC2
+  HEALTH_URL: https://api.myith.store/api/health
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21' # Core 는 Java 21
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Run tests
+        run: ./gradlew test
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-core
+      cancel-in-progress: true # 연속 push 시 앞의 배포는 취소
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      # Dockerfile 이 build/libs/*.jar 를 COPY 하므로 JAR 을 먼저 만든다.
+      - name: Build JAR
+        run: ./gradlew clean bootJar -x test
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          TAG=$(git rev-parse --short HEAD)
+          IMAGE="${REGISTRY}/${ECR_REPOSITORY}"
+          echo "IMAGE_TAG=${TAG}" >> "$GITHUB_ENV"
+          # EC2 가 x86 이므로 반드시 amd64. arm64 로 올리면 exec format error.
+          docker buildx build \
+            --platform linux/amd64 \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            -t "${IMAGE}:${TAG}" \
+            -t "${IMAGE}:latest" \
+            --push .
+
+      - name: Deploy to Core EC2 via SSM
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "${INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --comment "deploy core ${IMAGE_TAG}" \
+            --parameters commands="[
+              \"set -e\",
+              \"cd /home/ubuntu\",
+              \"aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${{ steps.ecr.outputs.registry }}\",
+              \"IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.core.yml pull core\",
+              \"IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.core.yml up -d --no-deps core\",
+              \"docker image prune -f\"
+            ]" \
+            --query "Command.CommandId" --output text)
+          echo "COMMAND_ID=${COMMAND_ID}" >> "$GITHUB_ENV"
+          echo "sent: ${COMMAND_ID}"
+
+      - name: Wait for SSM command
+        run: |
+          aws ssm wait command-executed \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${INSTANCE_ID}" \
+            --region "${AWS_REGION}" || true
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --query "Status" --output text)
+
+          echo "--- stdout ---"
+          aws ssm get-command-invocation \
+            --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --query "StandardOutputContent" --output text
+          echo "--- stderr ---"
+          aws ssm get-command-invocation \
+            --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --query "StandardErrorContent" --output text
+
+          [ "$STATUS" = "Success" ] || { echo "deploy failed: $STATUS"; exit 1; }
+
+      # ALB 를 통한 외부 확인. 컨테이너가 떠도 타겟이 healthy 로 바뀌는 데
+      # 시간이 걸리므로 최대 3분 재시도한다.
+      - name: Verify through ALB
+        run: |
+          for i in $(seq 1 36); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}" || true)
+            if [ "$CODE" = "200" ]; then
+              echo "✅ ${HEALTH_URL} -> 200 (${i}번째 시도)"
+              exit 0
+            fi
+            echo "attempt ${i}/36: ${CODE}"
+            sleep 5
+          done
+          echo "❌ 3분 내 200 미도달"
+          exit 1

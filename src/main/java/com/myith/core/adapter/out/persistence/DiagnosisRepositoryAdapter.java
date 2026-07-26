@@ -31,4 +31,11 @@ public class DiagnosisRepositoryAdapter implements DiagnosisRepository {
                 .map(DiagnosisJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public void deleteByRoadmapIds(List<Long> roadmapIds) {
+        if (!roadmapIds.isEmpty()) {
+            jpaRepository.deleteByRoadmapIds(roadmapIds);
+        }
+    }
 }

@@ -126,56 +126,6 @@ CREATE TABLE processed_event (
     consumed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- =============================================
--- 읽기 전용 테이블 (Worker·배치 소유, Core는 읽기만)
--- =============================================
-
-CREATE TABLE job (
-    job_code      VARCHAR(50)  PRIMARY KEY,
-    job_name      VARCHAR(100) NOT NULL,
-    category_code VARCHAR(50)  NOT NULL,
-    category_name VARCHAR(100) NOT NULL,
-    tagline       TEXT,
-    ncs_mapping   JSONB
-);
-
-CREATE TABLE job_profile (
-    job_code        VARCHAR(50) NOT NULL,
-    version         INT         NOT NULL,
-    axes            JSONB       NOT NULL,
-    skills          JSONB       NOT NULL,
-    levels          JSONB       NOT NULL,
-    prerequisites   JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    questions       JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    quest_templates JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    activity_quests JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    built_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (job_code, version)
-);
-
-CREATE TABLE user_competency (
-    id          BIGSERIAL      PRIMARY KEY,
-    roadmap_id  BIGINT         NOT NULL,
-    skill_code  VARCHAR(50)    NOT NULL,
-    mastery     NUMERIC(3,2)   NOT NULL,
-    evidence    TEXT,
-    confidence  NUMERIC(3,2),
-    UNIQUE (roadmap_id, skill_code)
-);
-
-CREATE TABLE ncs_unit (
-    code        VARCHAR(50)  PRIMARY KEY,
-    name        VARCHAR(200) NOT NULL,
-    description TEXT,
-    level       INT
-);
-
-CREATE TABLE ncs_certification (
-    id             BIGSERIAL    PRIMARY KEY,
-    ncs_unit_code  VARCHAR(50)  NOT NULL REFERENCES ncs_unit(code),
-    cert_code      VARCHAR(50),
-    cert_name      VARCHAR(200) NOT NULL,
-    unit_type      VARCHAR(50)
-);
-
-CREATE INDEX idx_ncs_cert_unit ON ncs_certification(ncs_unit_code);
+-- 읽기 전용 테이블은 Worker가 소유한다.
+-- Worker 배포 시 별도 마이그레이션으로 생성된다.
+-- Core는 job, job_profile, user_competency, ncs_unit, ncs_certification을 읽기만 한다.

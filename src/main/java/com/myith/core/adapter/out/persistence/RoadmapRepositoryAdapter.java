@@ -55,4 +55,17 @@ public class RoadmapRepositoryAdapter implements RoadmapRepository {
                 .map(RoadmapJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public List<Roadmap> findByUserId(Long userId) {
+        return jpaRepository.findByUserIdAndDeletedAtIsNull(userId)
+                .stream()
+                .map(RoadmapJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public void softDeleteByUserId(Long userId) {
+        jpaRepository.softDeleteByUserId(userId);
+    }
 }

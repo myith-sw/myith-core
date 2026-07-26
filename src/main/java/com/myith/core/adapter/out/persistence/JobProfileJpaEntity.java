@@ -8,6 +8,7 @@ import java.io.Serializable;
 import java.time.Instant;
 
 @Entity
+@org.hibernate.annotations.Immutable
 @Table(name = "job_profile")
 @IdClass(JobProfileJpaEntity.JobProfileId.class)
 public class JobProfileJpaEntity {

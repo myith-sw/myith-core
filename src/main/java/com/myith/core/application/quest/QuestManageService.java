@@ -1,17 +1,22 @@
 package com.myith.core.application.quest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myith.core.application.dashboard.SnapshotService;
+import com.myith.core.application.port.JobProfileReadRepository;
+import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
 import com.myith.core.application.port.QuestRepository;
 import com.myith.core.application.port.RoadmapRepository;
 import com.myith.core.application.roadmap.RoadmapQueryService;
-import com.myith.core.domain.roadmap.Quest;
-import com.myith.core.domain.roadmap.QuestSource;
-import com.myith.core.domain.roadmap.Roadmap;
+import com.myith.core.domain.roadmap.*;
+import com.myith.core.domain.roadmap.RoadmapAssembler.Prerequisite;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
@@ -21,15 +26,21 @@ public class QuestManageService {
     private final QuestRepository questRepository;
     private final RoadmapRepository roadmapRepository;
     private final SnapshotService snapshotService;
+    private final JobProfileReadRepository jobProfileReadRepository;
+    private final ObjectMapper objectMapper;
     private final int maxRetries;
 
     public QuestManageService(QuestRepository questRepository,
                               RoadmapRepository roadmapRepository,
                               SnapshotService snapshotService,
+                              JobProfileReadRepository jobProfileReadRepository,
+                              ObjectMapper objectMapper,
                               @Value("${policy.optimistic-lock.max-retries}") int maxRetries) {
         this.questRepository = questRepository;
         this.roadmapRepository = roadmapRepository;
         this.snapshotService = snapshotService;
+        this.jobProfileReadRepository = jobProfileReadRepository;
+        this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
     }
 
@@ -63,6 +74,9 @@ public class QuestManageService {
                 .findFirst()
                 .orElseThrow(() -> new QuestNotFoundException(questId));
 
+        Roadmap roadmap = roadmapRepository.findById(roadmapId)
+                .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(roadmapId));
+
         // 같은 레벨 퀘스트들을 순서대로 정렬
         List<Quest> levelQuests = quests.stream()
                 .filter(q -> q.getLevel() == targetLevel && !q.getId().equals(questId))
@@ -91,6 +105,9 @@ public class QuestManageService {
             );
             questRepository.save(updated);
         }
+
+        // 퀘스트 상태 재계산
+        recomputeQuestStatuses(roadmapId, roadmap.getJobCode(), roadmap.getProfileVersion());
     }
 
     /**
@@ -112,8 +129,9 @@ public class QuestManageService {
         Quest quest = Quest.createCustomQuest(roadmapId, axisCode, level, nextOrder, title);
         Quest saved = questRepository.save(quest);
 
-        // 사이드이펙트: 퀘스트 추가 → 완료율 변동 → 스냅샷 재계산
+        // 사이드이펙트: 퀘스트 추가 -> 완료율 변동 -> 스냅샷 재계산
         snapshotService.recalculate(roadmapId);
+        recomputeQuestStatuses(roadmapId, roadmap.getJobCode(), roadmap.getProfileVersion());
 
         return saved;
     }
@@ -141,8 +159,47 @@ public class QuestManageService {
 
         questRepository.delete(quest);
 
-        // 사이드이펙트: 퀘스트 삭제 → 완료율 변동 → 스냅샷 재계산
+        // 사이드이펙트: 퀘스트 삭제 -> 완료율 변동 -> 스냅샷 재계산
         snapshotService.recalculate(roadmapId);
+        recomputeQuestStatuses(roadmapId, roadmap.getJobCode(), roadmap.getProfileVersion());
+    }
+
+    private void recomputeQuestStatuses(Long roadmapId, String jobCode, int profileVersion) {
+        List<Quest> allQuests = questRepository.findByRoadmapId(roadmapId);
+
+        JobProfileData profile = jobProfileReadRepository
+                .findByJobCodeAndVersion(jobCode, profileVersion)
+                .orElse(null);
+        if (profile == null) return;
+
+        List<Prerequisite> prerequisites = parsePrerequisites(profile.prerequisites());
+
+        List<QuestUnlockPolicy.StatusChange> changes =
+                QuestUnlockPolicy.recompute(allQuests, prerequisites);
+
+        for (QuestUnlockPolicy.StatusChange change : changes) {
+            Quest q = allQuests.stream()
+                    .filter(quest -> quest.getId().equals(change.questId()))
+                    .findFirst().orElse(null);
+            if (q == null) continue;
+
+            Quest changed = Quest.restore(q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
+                    q.getLevel(), q.getOrderInLevel(), q.getTitle(), q.getCompletionCriteria(),
+                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), null,
+                    q.getVersion(), q.getCreatedAt(), Instant.now());
+            questRepository.save(changed);
+        }
+    }
+
+    private List<Prerequisite> parsePrerequisites(String prerequisitesJson) {
+        if (prerequisitesJson == null || prerequisitesJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(prerequisitesJson, new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            return List.of();
+        }
     }
 
     // ===== Exceptions =====
@@ -157,5 +214,9 @@ public class QuestManageService {
 
     public static class OptimisticLockConflictException extends RuntimeException {
         public OptimisticLockConflictException(String msg) { super(msg); }
+    }
+
+    public static class QuestLockedException extends RuntimeException {
+        public QuestLockedException(Long id) { super("Quest is locked: " + id); }
     }
 }

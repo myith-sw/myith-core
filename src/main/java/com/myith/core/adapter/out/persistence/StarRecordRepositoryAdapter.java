@@ -36,4 +36,9 @@ public class StarRecordRepositoryAdapter implements StarRecordRepository {
                 .map(StarRecordJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    public void softDeleteByUserId(Long userId) {
+        jpaRepository.softDeleteByUserId(userId);
+    }
 }

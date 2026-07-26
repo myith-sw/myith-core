@@ -1,5 +1,6 @@
 package com.myith.core.application.port;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,6 +16,8 @@ public interface OutboxRepository {
     void incrementRetry(Long id);
 
     void markFailed(Long id);
+
+    boolean existsRecentEvent(String aggregateId, String eventType, Instant since);
 
     record OutboxEvent(Long id, UUID eventId, String eventType,
                        String payload, int retryCount) {}

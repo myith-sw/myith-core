@@ -29,4 +29,11 @@ public class JobReadRepositoryAdapter implements JobReadRepository {
                 .map(e -> new JobData(e.getJobCode(), e.getJobName(),
                         e.getCategoryCode(), e.getCategoryName(), e.getTagline()));
     }
+
+    @Override
+    public List<String> findAllJobCodes() {
+        return jpaRepository.findAll().stream()
+                .map(JobJpaEntity::getJobCode)
+                .toList();
+    }
 }

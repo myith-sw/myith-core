@@ -53,4 +53,11 @@ public class QuestRepositoryAdapter implements QuestRepository {
             jpaRepository.save(entity);
         });
     }
+
+    @Override
+    public void softDeleteByRoadmapIds(List<Long> roadmapIds) {
+        if (!roadmapIds.isEmpty()) {
+            jpaRepository.softDeleteByRoadmapIds(roadmapIds);
+        }
+    }
 }

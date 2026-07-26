@@ -3,6 +3,7 @@ package com.myith.core.adapter.out.persistence;
 import com.myith.core.application.port.OutboxRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,5 +55,10 @@ public class OutboxRepositoryAdapter implements OutboxRepository {
             e.markFailed();
             jpaRepository.save(e);
         });
+    }
+
+    @Override
+    public boolean existsRecentEvent(String aggregateId, String eventType, Instant since) {
+        return jpaRepository.existsByAggregateIdAndEventTypeAndCreatedAtAfter(aggregateId, eventType, since);
     }
 }

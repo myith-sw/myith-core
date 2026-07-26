@@ -11,4 +11,5 @@ public interface QuestRepository {
     Optional<Quest> findById(Long id);
     List<Quest> findByRoadmapId(Long roadmapId);
     void delete(Quest quest);
+    void softDeleteByRoadmapIds(List<Long> roadmapIds);
 }

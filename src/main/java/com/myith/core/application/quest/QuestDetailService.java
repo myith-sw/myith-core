@@ -8,9 +8,7 @@ import com.myith.core.application.port.*;
 import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
 import com.myith.core.application.port.NcsReadRepository.CertificationData;
 import com.myith.core.application.port.NcsReadRepository.NcsUnitData;
-import com.myith.core.domain.roadmap.Quest;
-import com.myith.core.domain.roadmap.QuestStatus;
-import com.myith.core.domain.roadmap.Roadmap;
+import com.myith.core.domain.roadmap.*;
 import com.myith.core.domain.roadmap.RoadmapAssembler.Prerequisite;
 import com.myith.core.domain.star.StarRecord;
 import com.myith.core.application.roadmap.RoadmapQueryService;
@@ -19,6 +17,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -33,6 +32,7 @@ public class QuestDetailService {
     private final SnapshotService snapshotService;
     private final NcsReadRepository ncsReadRepository;
     private final JobProfileReadRepository jobProfileReadRepository;
+    private final DashboardSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
     private final int maxRetries;
 
@@ -43,6 +43,7 @@ public class QuestDetailService {
                               SnapshotService snapshotService,
                               NcsReadRepository ncsReadRepository,
                               JobProfileReadRepository jobProfileReadRepository,
+                              DashboardSnapshotRepository snapshotRepository,
                               ObjectMapper objectMapper,
                               @Value("${policy.optimistic-lock.max-retries}") int maxRetries) {
         this.questRepository = questRepository;
@@ -52,6 +53,7 @@ public class QuestDetailService {
         this.snapshotService = snapshotService;
         this.ncsReadRepository = ncsReadRepository;
         this.jobProfileReadRepository = jobProfileReadRepository;
+        this.snapshotRepository = snapshotRepository;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
     }
@@ -82,19 +84,27 @@ public class QuestDetailService {
                 .map(r -> new StarDto(r.getSituation(), r.getTask(), r.getAction(), r.getResult()))
                 .orElse(null);
 
-        return new QuestDetailDto(quest.getId(), quest.getTitle(), quest.getAxisCode(),
-                quest.getLevel(), quest.getStatus().name(), ncsUnit, certifications,
-                quest.getCompletionCriteria(), star);
+        // axisCode -> axisName 매핑
+        String axisName = resolveAxisName(roadmap.getJobCode(), roadmap.getProfileVersion(), quest.getAxisCode());
+        String updatedAt = quest.getUpdatedAt() != null ? quest.getUpdatedAt().toString() : null;
+
+        return new QuestDetailDto(quest.getId(), quest.getRoadmapId(), quest.getTitle(),
+                quest.getAxisCode(), axisName, quest.getLevel(),
+                quest.getStatus().name(), quest.getSource().name(),
+                quest.getOrderInLevel(), quest.getVersion(),
+                ncsUnit, certifications, quest.getCompletionCriteria(), star, updatedAt);
     }
 
     /**
      * 퀘스트 완료 토글.
      * 사이드이펙트:
-     *   1. 완료 시 선행관계의 후행 퀘스트 LOCKED → OPEN 해제
+     *   1. QuestUnlockPolicy로 전체 퀘스트 LOCKED/OPEN 재계산
      *   2. dashboard_snapshot 재계산
+     *
+     * @return 컨트롤러가 응답을 조립할 수 있도록 결과를 반환한다.
      */
     @Transactional
-    public void toggleComplete(Long userId, Long questId, boolean completed, long version) {
+    public ToggleResult toggleComplete(Long userId, Long questId, boolean completed, long version) {
         Quest quest = questRepository.findById(questId)
                 .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
 
@@ -108,7 +118,13 @@ public class QuestDetailService {
                     "Quest version mismatch: expected " + version + ", actual " + quest.getVersion());
         }
 
-        QuestStatus newStatus = completed ? QuestStatus.DONE : QuestStatus.OPEN;
+        // Bug B-2: completed=false일 때 STAR 존재 여부에 따라 PENDING 또는 OPEN
+        QuestStatus newStatus;
+        if (completed) {
+            newStatus = QuestStatus.DONE;
+        } else {
+            newStatus = determineUncompleteStatus(questId);
+        }
         Instant completedAt = completed ? Instant.now() : null;
 
         Quest updated = Quest.restore(
@@ -125,58 +141,153 @@ public class QuestDetailService {
             throw new QuestManageService.OptimisticLockConflictException("Concurrent quest update detected");
         }
 
-        // 사이드이펙트 1: 완료 시 후행 퀘스트 LOCKED 해제
-        if (completed) {
-            unlockDependentQuests(roadmap);
-        }
+        // 사이드이펙트 1: QuestUnlockPolicy로 전체 퀘스트 상태 재계산
+        List<Long> unlockedIds = recomputeQuestStatuses(roadmap);
 
         // 사이드이펙트 2: 스냅샷 재계산
         snapshotService.recalculate(quest.getRoadmapId());
+
+        // 스냅샷 읽기
+        DashboardSnapshotRepository.SnapshotData snapshot =
+                snapshotRepository.findByRoadmapId(quest.getRoadmapId()).orElse(null);
+
+        // 다음 퀘스트 (OPEN 상태 중 가장 낮은 레벨 순서)
+        List<Quest> allQuests = questRepository.findByRoadmapId(quest.getRoadmapId());
+        Quest nextQuest = allQuests.stream()
+                .filter(q -> q.getStatus() == QuestStatus.OPEN)
+                .min(Comparator.comparingInt(Quest::getLevel).thenComparingInt(Quest::getOrderInLevel))
+                .orElse(null);
+
+        // 현재 진행 중인 레벨
+        int currentLevel = allQuests.stream()
+                .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.DONE)
+                .mapToInt(Quest::getLevel)
+                .max().orElse(1);
+
+        // 저장된 퀘스트 다시 읽기 (version 갱신됨)
+        Quest savedQuest = questRepository.findById(questId)
+                .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
+
+        // axisCode -> axisName 매핑
+        Map<String, String> axisNameMap = buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
+
+        // 레이더 파싱
+        List<ToggleResult.RadarEntry> radar = parseRadar(snapshot, axisNameMap);
+
+        return new ToggleResult(
+                savedQuest.getId(), savedQuest.getStatus(), savedQuest.getVersion(),
+                savedQuest.getCompletedAt(),
+                unlockedIds,
+                snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO,
+                snapshot != null ? snapshot.stage() : null,
+                currentLevel,
+                nextQuest != null ? new ToggleResult.NextQuest(nextQuest.getId(), nextQuest.getTitle()) : null,
+                radar
+        );
     }
 
     /**
-     * 선행 퀘스트가 완료되면 후행 LOCKED 퀘스트를 OPEN으로 전환.
-     * job_profile의 prerequisites를 읽어서 실제 선후관계를 확인한다.
+     * completed=false 시 STAR 존재 여부에 따른 상태 결정 (Bug B-2).
      */
-    private void unlockDependentQuests(Roadmap roadmap) {
+    private QuestStatus determineUncompleteStatus(Long questId) {
+        Optional<StarRecord> starOpt = starRecordRepository.findByQuestId(questId);
+        if (starOpt.isPresent()) {
+            StarRecord star = starOpt.get();
+            boolean hasContent = (star.getSituation() != null && !star.getSituation().isBlank())
+                    || (star.getTask() != null && !star.getTask().isBlank())
+                    || (star.getAction() != null && !star.getAction().isBlank())
+                    || (star.getResult() != null && !star.getResult().isBlank());
+            if (hasContent) {
+                return QuestStatus.PENDING;
+            }
+        }
+        return QuestStatus.OPEN;
+    }
+
+    /**
+     * QuestUnlockPolicy를 사용하여 전체 퀘스트 LOCKED/OPEN 상태를 재계산한다.
+     *
+     * @return 새로 해금된 퀘스트 ID 목록
+     */
+    List<Long> recomputeQuestStatuses(Roadmap roadmap) {
         List<Quest> allQuests = questRepository.findByRoadmapId(roadmap.getId());
 
-        // 선후관계 조회
         JobProfileData profile = jobProfileReadRepository
                 .findByJobCodeAndVersion(roadmap.getJobCode(), roadmap.getProfileVersion())
                 .orElse(null);
-        if (profile == null) return;
+        if (profile == null) return List.of();
 
         List<Prerequisite> prerequisites = parsePrerequisites(profile.prerequisites());
-        if (prerequisites.isEmpty()) return;
 
-        // skillCode → 선행으로 필요한 스킬 목록
-        Map<String, Set<String>> prereqMap = new HashMap<>();
-        for (Prerequisite p : prerequisites) {
-            prereqMap.computeIfAbsent(p.to(), k -> new HashSet<>()).add(p.from());
-        }
+        List<QuestUnlockPolicy.StatusChange> changes =
+                QuestUnlockPolicy.recompute(allQuests, prerequisites);
 
-        // 현재 완료된 스킬 목록
-        Set<String> completedSkills = allQuests.stream()
-                .filter(q -> q.getSkillCode() != null && q.getStatus().isCompleted())
-                .map(Quest::getSkillCode)
-                .collect(Collectors.toSet());
+        List<Long> unlockedIds = new ArrayList<>();
+        for (QuestUnlockPolicy.StatusChange change : changes) {
+            Quest q = allQuests.stream()
+                    .filter(quest -> quest.getId().equals(change.questId()))
+                    .findFirst().orElse(null);
+            if (q == null) continue;
 
-        // LOCKED 퀘스트 중 선행이 모두 완료된 것만 OPEN으로 전환
-        for (Quest q : allQuests) {
-            if (q.getStatus() != QuestStatus.LOCKED || q.getSkillCode() == null) continue;
-
-            Set<String> required = prereqMap.getOrDefault(q.getSkillCode(), Set.of());
-            if (completedSkills.containsAll(required)) {
-                Quest unlocked = Quest.restore(
-                        q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
-                        q.getLevel(), q.getOrderInLevel(), q.getTitle(),
-                        q.getCompletionCriteria(), q.getNcsUnitCode(),
-                        q.getSource(), QuestStatus.OPEN, null,
-                        q.getVersion(), q.getCreatedAt(), Instant.now()
-                );
-                questRepository.save(unlocked);
+            if (change.newStatus() == QuestStatus.OPEN) {
+                unlockedIds.add(q.getId());
             }
+
+            Quest changed = Quest.restore(q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
+                    q.getLevel(), q.getOrderInLevel(), q.getTitle(), q.getCompletionCriteria(),
+                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), null,
+                    q.getVersion(), q.getCreatedAt(), Instant.now());
+            questRepository.save(changed);
+        }
+        return unlockedIds;
+    }
+
+    private String resolveAxisName(String jobCode, int profileVersion, String axisCode) {
+        return jobProfileReadRepository.findByJobCodeAndVersion(jobCode, profileVersion)
+                .map(p -> {
+                    try {
+                        List<Map<String, String>> axes = objectMapper.readValue(
+                                p.axes(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                        return axes.stream()
+                                .filter(a -> axisCode.equals(a.get("axisCode")))
+                                .map(a -> a.get("axisName"))
+                                .findFirst()
+                                .orElse(axisCode);
+                    } catch (JsonProcessingException e) {
+                        return axisCode;
+                    }
+                }).orElse(axisCode);
+    }
+
+    private Map<String, String> buildAxisNameMap(String jobCode, int profileVersion) {
+        return jobProfileReadRepository.findByJobCodeAndVersion(jobCode, profileVersion)
+                .map(p -> {
+                    try {
+                        List<Map<String, String>> axes = objectMapper.readValue(
+                                p.axes(), new TypeReference<>() {});
+                        return axes.stream().collect(Collectors.toMap(
+                                a -> a.get("axisCode"), a -> a.get("axisName")));
+                    } catch (JsonProcessingException e) {
+                        return Collections.<String, String>emptyMap();
+                    }
+                }).orElse(Collections.emptyMap());
+    }
+
+    private List<ToggleResult.RadarEntry> parseRadar(DashboardSnapshotRepository.SnapshotData snapshot,
+                                                      Map<String, String> axisNameMap) {
+        if (snapshot == null || snapshot.radarJson() == null) return List.of();
+        try {
+            List<Map<String, Object>> radarRaw = objectMapper.readValue(
+                    snapshot.radarJson(), new TypeReference<>() {});
+            return radarRaw.stream().map(r -> {
+                String axisCode = (String) r.get("axisCode");
+                BigDecimal percent = r.get("percent") instanceof Number n
+                        ? BigDecimal.valueOf(n.doubleValue()) : BigDecimal.ZERO;
+                String axisName = axisNameMap.getOrDefault(axisCode, axisCode);
+                return new ToggleResult.RadarEntry(axisCode, axisName, percent);
+            }).toList();
+        } catch (JsonProcessingException e) {
+            return List.of();
         }
     }
 
@@ -212,28 +323,58 @@ public class QuestDetailService {
         }
     }
 
-    // STAR 피드백 요청 → Outbox 발행 → 202
+    // STAR AI 보완 요청 -> Outbox 발행 -> 202
     @Transactional
-    public UUID requestStarFeedback(Long userId, Long starRecordId) {
+    public UUID requestAiEnhancement(Long userId, Long questId,
+                                      String situation, String task, String action, String result,
+                                      String locale, String style) {
+        Quest quest = questRepository.findById(questId)
+                .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
+
+        Roadmap roadmap = roadmapRepository.findById(quest.getRoadmapId())
+                .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
+        RoadmapQueryService.validateOwnership(roadmap, userId);
+
         UUID eventId = UUID.randomUUID();
-        Map<String, Object> payload = Map.of(
-                "starRecordId", starRecordId,
-                "userId", userId
-        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("requestId", eventId.toString());
+        payload.put("questId", questId);
+        payload.put("roadmapId", quest.getRoadmapId());
+        payload.put("userId", userId);
+        payload.put("star", Map.of(
+                "situation", situation != null ? situation : "",
+                "task", task != null ? task : "",
+                "action", action != null ? action : "",
+                "result", result != null ? result : ""
+        ));
+        if (locale != null) payload.put("locale", locale);
+        if (style != null) payload.put("style", style);
+
         try {
-            outboxRepository.save("StarRecord", String.valueOf(starRecordId),
-                    eventId, "StarFeedbackRequested", objectMapper.writeValueAsString(payload));
+            outboxRepository.save("StarRecord", String.valueOf(questId),
+                    eventId, "AiEnhancementRequested", objectMapper.writeValueAsString(payload));
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize star feedback payload", e);
+            throw new RuntimeException("Failed to serialize AI enhancement payload", e);
         }
         return eventId;
     }
 
     // ===== DTOs =====
-    public record QuestDetailDto(Long questId, String title, String axisName, int level,
-                                 String status, NcsUnitDto ncsUnit, List<CertDto> certifications,
-                                 String completionCriteria, StarDto star) {}
+    public record QuestDetailDto(Long questId, Long roadmapId, String title,
+                                 String axisCode, String axisName, int level,
+                                 String status, String source, int order, long version,
+                                 NcsUnitDto ncsUnit, List<CertDto> certifications,
+                                 String completionCriteria, StarDto star, String updatedAt) {}
     public record NcsUnitDto(String code, String name, String description) {}
     public record CertDto(String name) {}
     public record StarDto(String situation, String task, String action, String result) {}
+
+    public record ToggleResult(Long questId, QuestStatus newStatus, long newVersion,
+                               Instant completedAt, List<Long> unlockedQuestIds,
+                               BigDecimal completionRate, String stage,
+                               int currentLevel, NextQuest nextQuest,
+                               List<RadarEntry> radar) {
+        public record NextQuest(Long questId, String title) {}
+        public record RadarEntry(String axisCode, String axisName, BigDecimal percent) {}
+    }
 }

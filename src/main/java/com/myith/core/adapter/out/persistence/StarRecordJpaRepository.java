@@ -1,6 +1,7 @@
 package com.myith.core.adapter.out.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,4 +24,8 @@ public interface StarRecordJpaRepository extends JpaRepository<StarRecordJpaEnti
             @Param("cursor") Long cursor,
             @Param("completeness") String completeness,
             org.springframework.data.domain.Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE StarRecordJpaEntity s SET s.deletedAt = CURRENT_TIMESTAMP WHERE s.userId = :userId AND s.deletedAt IS NULL")
+    void softDeleteByUserId(@Param("userId") Long userId);
 }

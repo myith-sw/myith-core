@@ -1,12 +1,15 @@
 package com.myith.core.adapter.in.web;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myith.core.application.port.AiEnhancementResultStore;
 import com.myith.core.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,11 +18,20 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Optional;
 
 @Tag(name = "Quest", description = "퀘스트·STAR")
 @RestController
 @RequestMapping("/api/ai-enhancements")
 public class AiEnhancementController {
+
+    private final AiEnhancementResultStore resultStore;
+    private final ObjectMapper objectMapper;
+
+    public AiEnhancementController(AiEnhancementResultStore resultStore, ObjectMapper objectMapper) {
+        this.resultStore = resultStore;
+        this.objectMapper = objectMapper;
+    }
 
     @Operation(
             summary = "AI 보완 결과 조회",
@@ -80,11 +92,56 @@ public class AiEnhancementController {
     public ResponseEntity<ApiResponse<AiEnhancementResultResponse>> getResult(
             @AuthenticationPrincipal Long userId,
             @PathVariable String requestId) {
-        // 미구현 — Worker 결과를 조회하여 반환
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        Optional<String> resultJson = resultStore.find(requestId);
+        if (resultJson.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.of(
+                    new AiEnhancementResultResponse(requestId, null, "PROCESSING",
+                            null, null, null, null, null)));
+        }
+
+        try {
+            JsonNode node = objectMapper.readTree(resultJson.get());
+            String status = node.has("status") ? node.get("status").asText() : "COMPLETED";
+
+            if ("FAILED".equals(status)) {
+                String errorCode = node.has("errorCode") ? node.get("errorCode").asText() : null;
+                return ResponseEntity.ok(ApiResponse.of(
+                        new AiEnhancementResultResponse(requestId, null, "FAILED",
+                                null, null, null, errorCode, null)));
+            }
+
+            EnhancedStar enhancedStar = null;
+            if (node.has("enhancedStar")) {
+                JsonNode es = node.get("enhancedStar");
+                enhancedStar = new EnhancedStar(
+                        es.has("situation") ? es.get("situation").asText() : null,
+                        es.has("task") ? es.get("task").asText() : null,
+                        es.has("action") ? es.get("action").asText() : null,
+                        es.has("result") ? es.get("result").asText() : null
+                );
+            }
+
+            List<FeedbackEntry> feedback = null;
+            if (node.has("feedback")) {
+                feedback = objectMapper.convertValue(node.get("feedback"),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, FeedbackEntry.class));
+            }
+
+            String questId = node.has("questId") ? node.get("questId").asText() : null;
+            String resumeDraft = node.has("resumeDraft") ? node.get("resumeDraft").asText() : null;
+            String createdAt = node.has("createdAt") ? node.get("createdAt").asText() : null;
+
+            return ResponseEntity.ok(ApiResponse.of(
+                    new AiEnhancementResultResponse(requestId, questId, "COMPLETED",
+                            enhancedStar, feedback, resumeDraft, null, createdAt)));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ApiResponse.of(
+                    new AiEnhancementResultResponse(requestId, null, "PROCESSING",
+                            null, null, null, null, null)));
+        }
     }
 
-    // ── Response DTOs ──
+    // -- Response DTOs --
 
     @Schema(name = "AiEnhancementResultResponse")
     record AiEnhancementResultResponse(
