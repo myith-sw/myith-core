@@ -52,8 +52,7 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
 
     // PDF
-    // PDF 렌더링 - 내보내기 구현 시 활성화
-    // implementation("org.xhtmlrenderer:flying-saucer-pdf-openpdf:9.7.2")
+    implementation("org.xhtmlrenderer:flying-saucer-pdf-openpdf:9.4.0")
 
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
