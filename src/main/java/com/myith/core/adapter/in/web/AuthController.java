@@ -31,9 +31,11 @@ public class AuthController {
     @Operation(
             summary = "구글 로그인",
             description = """
-                    Google ID Token을 서버가 로컬 검증한다(캐싱된 공개키로 JWT 서명 검증).
-                    최초 로그인 시 자동 가입하고 users.nickname을 구글 이름으로 세팅한다.
-                    isNewUser로 프론트가 온보딩(알 선택 화면 1-1)으로 분기한다."""
+                    Google ID Token을 서버가 로컬 검증합니다(캐싱된 공개키로 JWT 서명 검증).
+                    최초 로그인 시 자동 가입하고 users.nickname을 구글 이름으로 초기화합니다.
+                    응답의 isNewUser가 true이면 온보딩 화면(알 선택 화면 1-1)으로 이동하고,
+                    false이면 홈 화면(화면 1-2)으로 이동합니다.
+                    발급된 accessToken은 이후 모든 API 요청의 Authorization: Bearer 헤더에 담아 보냅니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공",
@@ -69,9 +71,10 @@ public class AuthController {
     @Operation(
             summary = "토큰 갱신",
             description = """
-                    401 + TOKEN_EXPIRED 수신 시 프론트가 이 엔드포인트를 1회 호출하고 원 요청을 재시도한다.
-                    재차 401이면 로그인 화면으로 보낸다.
-                    refreshToken은 요청 바디로 받는다(httpOnly 쿠키 아님)."""
+                    accessToken 만료 시(401 + code: TOKEN_EXPIRED) 이 엔드포인트를 1회 호출하고 원 요청을 재시도합니다.
+                    재시도 후에도 401이 반환되면 로그인 화면으로 이동합니다.
+                    refreshToken은 요청 바디로 전달합니다(httpOnly 쿠키 방식이 아닙니다).
+                    성공 응답에는 accessToken만 포함되며, refreshToken은 갱신되지 않습니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "갱신 성공",
@@ -109,13 +112,13 @@ public class AuthController {
 
     @Schema(name = "GoogleLoginResponse")
     record GoogleLoginResponse(
-            @Schema(description = "API 요청에 사용할 액세스 토큰. Authorization: Bearer {token} 헤더에 실어 보낸다",
+            @Schema(description = "모든 API 요청의 Authorization: Bearer {accessToken} 헤더에 담아 보냅니다. 만료 시 /api/auth/refresh로 갱신합니다.",
                     example = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.abc")
             String accessToken,
-            @Schema(description = "토큰 갱신에 사용할 리프레시 토큰. POST /api/auth/refresh 요청 시 사용",
+            @Schema(description = "accessToken 만료 시 /api/auth/refresh 요청 바디에 담아 보냅니다. 안전한 저장소(Keychain, SecureStorage 등)에 보관합니다.",
                     example = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.xyz")
             String refreshToken,
-            @Schema(description = "화면 1-1 알 선택 화면 분기용. true면 신규가입이므로 온보딩으로 이동", example = "true")
+            @Schema(description = "true이면 신규 가입이므로 온보딩(알 선택 화면 1-1)으로 이동합니다. false이면 홈(화면 1-2)으로 이동합니다.", example = "true")
             boolean isNewUser
     ) {}
 
@@ -127,7 +130,7 @@ public class AuthController {
 
     @Schema(name = "RefreshResponse")
     record RefreshResponse(
-            @Schema(description = "새로 발급된 액세스 토큰", example = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.new")
+            @Schema(description = "새로 발급된 액세스 토큰입니다. 기존 토큰을 이 값으로 교체한 뒤 원 요청을 재시도합니다.", example = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfMDFKM0FCQyJ9.new")
             String accessToken
     ) {}
 }

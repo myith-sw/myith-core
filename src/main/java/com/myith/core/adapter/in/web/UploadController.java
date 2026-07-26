@@ -31,9 +31,17 @@ public class UploadController {
     @Operation(
             summary = "S3 Presigned URL 발급",
             description = """
-                    프론트가 uploadUrl로 S3에 직접 PUT 업로드하고, fileKey만 로드맵 생성에 넘긴다.
-                    서버는 파일 본문을 받지 않는다.
-                    허용 타입: application/pdf, image/png, image/jpeg. 상한 10MB."""
+                    로드맵 생성 화면에서 포트폴리오·이미지 파일을 첨부할 때 호출합니다.
+
+                    파일 업로드 플로우:
+                    1. 이 API를 호출해 uploadUrl과 fileKey를 받습니다.
+                    2. uploadUrl로 S3에 직접 PUT 요청을 보내 파일을 업로드합니다.
+                       (Content-Type 헤더를 요청한 contentType 값과 동일하게 설정해야 합니다.)
+                    3. fileKey를 POST /api/roadmaps의 experiences[].fileKey 필드에 담아 로드맵 생성을 호출합니다.
+                    서버는 파일 본문을 직접 받지 않습니다.
+
+                    허용 타입: application/pdf, image/png, image/jpeg. 파일 크기 상한 10MB.
+                    Presigned URL의 유효 시간은 expiresIn(초)입니다. 만료 전에 PUT 업로드를 완료하세요."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급 성공",
@@ -67,20 +75,20 @@ public class UploadController {
 
     @Schema(name = "PresignRequest")
     record PresignRequest(
-            @Schema(description = "업로드할 파일 이름", example = "portfolio.pdf")
+            @Schema(description = "업로드할 파일 이름입니다. 확장자를 포함해야 합니다.", example = "portfolio.pdf")
             @NotBlank String fileName,
-            @Schema(description = "MIME 타입. application/pdf, image/png, image/jpeg만 허용", example = "application/pdf")
+            @Schema(description = "MIME 타입입니다. application/pdf, image/png, image/jpeg만 허용됩니다.", example = "application/pdf")
             @NotBlank String contentType
     ) {}
 
     @Schema(name = "PresignResponse")
     record PresignResponse(
-            @Schema(description = "프론트가 PUT 요청을 보낼 S3 Presigned URL",
+            @Schema(description = "S3에 파일을 PUT 업로드할 Presigned URL입니다. Authorization 헤더 없이 직접 요청하세요.",
                     example = "https://myith-uploads.s3.ap-northeast-2.amazonaws.com/...")
             String uploadUrl,
-            @Schema(description = "로드맵 생성 시 전달할 파일 키", example = "portfolio/usr_01J3ABC/9f2c1d.pdf")
+            @Schema(description = "로드맵 생성 시 experiences[].fileKey 필드에 전달할 파일 키입니다. 안전하게 보관하세요.", example = "portfolio/usr_01J3ABC/9f2c1d.pdf")
             String fileKey,
-            @Schema(description = "URL 만료 시간(초)", example = "900")
+            @Schema(description = "uploadUrl의 만료 시간(초)입니다. 이 시간 안에 S3 PUT 업로드를 완료해야 합니다.", example = "900")
             int expiresIn
     ) {}
 }

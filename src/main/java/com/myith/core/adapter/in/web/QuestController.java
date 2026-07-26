@@ -36,10 +36,11 @@ public class QuestController {
     @Operation(
             summary = "퀘스트 상세 조회",
             description = """
-                    화면 4-2(퀘스트 상세 + STAR).
-                    ncsUnit은 source: CUSTOM이면 null이다.
-                    certifications는 연계 자격 전부를 내린다. 없으면 빈 배열(프론트가 '해당 없음' 표시).
-                    star가 null이면 입력칸을 빈 값으로 시작한다."""
+                    화면 4-2(퀘스트 상세 + STAR)에서 호출합니다.
+                    ncsUnit은 source가 CUSTOM이면 null입니다. null인 경우 'NCS 근거' 섹션 자체를 숨기세요.
+                    certifications는 연계 자격 전체를 반환합니다. 빈 배열이면 '해당 없음'을 표시하세요.
+                    star가 null이면 STAR 입력칸을 빈 값으로 초기화하세요.
+                    version 필드는 낙관적 락 토큰으로, PATCH /complete 호출 시 그대로 전달해야 합니다."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
             content = @Content(mediaType = "application/json",
@@ -98,10 +99,11 @@ public class QuestController {
     @Operation(
             summary = "STAR 기록 저장 (임시 저장)",
             description = """
-                    각 필드 trim 후 0~2000자. 임시 저장이므로 빈 값을 허용한다.
-                    최초 저장 시 퀘스트 상태가 OPEN → PENDING으로 바뀐다.
-                    프론트는 textarea blur 또는 debounce로 호출한다.
-                    AI 제안을 적용해 저장한 경우 source: "ai-assisted" + aiEnhancementId를 채운다."""
+                    화면 4-2(STAR 입력 탭)에서 textarea blur 또는 debounce 시 호출합니다.
+                    각 필드는 trim 후 최대 2000자입니다. 임시 저장이므로 빈 값도 허용합니다.
+                    최초 저장 시 퀘스트 상태가 OPEN → PENDING으로 변경됩니다.
+                    AI 제안을 적용해 저장하는 경우 source를 "ai-assisted"로, aiEnhancementId를 해당 요청 ID로 채우세요.
+                    완료(DONE)된 퀘스트에도 STAR를 수정할 수 있습니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공",
@@ -152,9 +154,12 @@ public class QuestController {
     @Operation(
             summary = "퀘스트 완료 토글",
             description = """
-                    STAR 본문은 여기서 보내지 않는다. PUT /star로 이미 저장된 값을 쓴다.
-                    응답에 radar를 함께 내려 프론트가 레이더를 재조회 없이 갱신하게 한다.
-                    409 VERSION_CONFLICT 응답에는 최신 version을 포함해 프론트가 재시도할 수 있게 한다.""",
+                    화면 4-2(퀘스트 상세)의 '완료' 버튼 탭 시 호출합니다.
+                    STAR 본문은 이 API에서 받지 않습니다. PUT /star로 미리 저장된 값을 사용합니다.
+                    응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
+                    unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
+                    409 VERSION_CONFLICT 수신 시, 퀘스트 상세를 재조회한 뒤 새 version 값으로 재시도하세요.
+                    completed: false를 보내면 완료 취소(DONE → OPEN)가 처리됩니다.""",
             parameters = @Parameter(name = "Idempotency-Key", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER,
                     description = "멱등성 키 (optional)", required = false,
                     schema = @Schema(type = "string"))
@@ -230,9 +235,11 @@ public class QuestController {
     @Operation(
             summary = "STAR AI 보완 요청",
             description = """
-                    STAR 원문을 AI에게 보내 보완 제안·피드백·자기소개서 초안을 받는다.
-                    서버는 원문을 수정하지 않는다. 사용자가 '적용'을 누르면 프론트가 textarea를 채우고 PUT /star로 저장한다.
-                    202 수신 후 프론트가 GET /api/ai-enhancements/{requestId}를 짧은 간격으로 폴링한다."""
+                    화면 4-2(STAR 입력 탭)의 'AI 보완 요청' 버튼 탭 시 호출합니다.
+                    STAR 원문을 AI에 전달해 보완 제안·항목별 피드백·자기소개서 초안을 받습니다.
+                    서버는 원문을 직접 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /star로 저장하세요.
+                    202 수신 후 GET /api/ai-enhancements/{requestId}를 1~2초 간격으로 폴링하여 결과를 확인하세요.
+                    PROCESSING 상태가 지속되면 최대 30초 후 타임아웃 처리를 권장합니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "비동기 접수",
@@ -293,17 +300,17 @@ public class QuestController {
             @Schema(description = "역량 축 코드", example = "cs") String axisCode,
             @Schema(description = "역량 축 이름", example = "CS·자료구조") String axisName,
             @Schema(description = "퀘스트 제목", example = "CS 면접 질문을 정리한다") String title,
-            @Schema(description = "화면 4-2 상태", example = "OPEN",
+            @Schema(description = "화면 4-2 퀘스트 상태", example = "OPEN",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = "퀘스트 종류", example = "ACTIVITY",
                     allowableValues = {"SKILL", "ACTIVITY", "CUSTOM"}) String source,
             @Schema(description = "레벨 내 순서", example = "1") int order,
-            @Schema(description = "낙관적 락 버전", example = "0") long version,
-            @Schema(description = "화면 4-2 '완료 기준' 박스", example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
-            @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스. source: CUSTOM이면 null") NcsUnitResponse ncsUnit,
-            @Schema(description = "화면 4-2 '추천 자격'. 빈 배열이면 '해당 없음'") List<CertResponse> certifications,
-            @Schema(description = "화면 4-2 STAR 입력칸 4개 초기값. null이면 빈 값으로 시작", nullable = true) StarResponse star,
-            @Schema(description = "STAR 출처. manual | ai-assisted", nullable = true) String starSource,
+            @Schema(description = "낙관적 락 버전. PATCH /complete 호출 시 그대로 전달해야 합니다", example = "0") long version,
+            @Schema(description = "화면 4-2 '완료 기준' 박스에 표시합니다", example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
+            @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스에 표시합니다. source가 CUSTOM이면 null이므로 섹션 자체를 숨기세요", nullable = true) NcsUnitResponse ncsUnit,
+            @Schema(description = "화면 4-2 '추천 자격' 목록입니다. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
+            @Schema(description = "화면 4-2 STAR 입력칸 4개의 초기값입니다. null이면 빈 값으로 초기화하세요", nullable = true) StarResponse star,
+            @Schema(description = "STAR 출처. manual 또는 ai-assisted", nullable = true) String starSource,
             @Schema(description = "최근 수정일", example = "2026-07-24T03:00:00Z") String updatedAt
     ) {}
 
@@ -329,10 +336,10 @@ public class QuestController {
 
     @Schema(name = "SaveStarRequest")
     record SaveStarRequest(
-            @Schema(description = "STAR 기록. 각 필드 trim 후 0~2000자. 임시 저장이므로 빈 값 허용") StarInput star,
-            @Schema(description = "출처. manual | ai-assisted", example = "manual",
+            @Schema(description = "STAR 기록입니다. 각 필드는 trim 후 최대 2000자이며, 임시 저장이므로 빈 값도 허용합니다") StarInput star,
+            @Schema(description = "저장 출처입니다. 직접 작성이면 manual, AI 제안 적용이면 ai-assisted를 전달하세요", example = "manual",
                     allowableValues = {"manual", "ai-assisted"}) String source,
-            @Schema(description = "AI 보완을 적용한 경우 해당 요청 ID", example = "null") String aiEnhancementId
+            @Schema(description = "AI 보완을 적용한 경우 해당 요청 ID를 전달하세요. 직접 작성 시 null", nullable = true, example = "aie_01J3ABC") String aiEnhancementId
     ) {}
 
     @Schema(name = "StarInput")
@@ -351,26 +358,26 @@ public class QuestController {
     record SaveStarResponse(
             @Schema(description = "퀘스트 ID", example = "qst_05") String questId,
             @Schema(description = "저장된 STAR 기록") StarInput star,
-            @Schema(description = "출처", example = "manual") String source,
-            @Schema(description = "퀘스트 상태. 최초 저장 시 OPEN → PENDING", example = "PENDING",
+            @Schema(description = "저장 출처", example = "manual") String source,
+            @Schema(description = "저장 후 퀘스트 상태입니다. 최초 저장 시 OPEN → PENDING으로 변경됩니다", example = "PENDING",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = "수정 시각", example = "2026-07-24T03:10:00Z") String updatedAt
     ) {}
 
     @Schema(name = "CompleteRequest")
     record CompleteRequest(
-            @Schema(description = "true: 완료 / false: 완료 취소", example = "true")
+            @Schema(description = "true면 완료 처리, false면 완료 취소(DONE → OPEN)입니다", example = "true")
             @NotNull Boolean completed,
-            @Schema(description = "낙관적 락 버전. GET /api/roadmaps/{id} 또는 GET /api/quests/{id}에서 받은 version", example = "3")
+            @Schema(description = "낙관적 락 버전입니다. GET /api/roadmaps/{id} 또는 GET /api/quests/{id}에서 받은 version 값을 그대로 전달하세요. 409 VERSION_CONFLICT 수신 시 퀘스트 상세 재조회 후 새 version으로 재시도하세요", example = "3")
             @NotNull Long version
     ) {}
 
     @Schema(name = "CompleteResponse")
     record CompleteResponse(
-            @Schema(description = "완료된 퀘스트 정보") CompletedQuestInfo quest,
-            @Schema(description = "캐릭터 변화") CharacterChanges characterChanges,
-            @Schema(description = "완료 직후 잠금 해제된 퀘스트 ID 목록. 화면 4-1 잠금 해제 애니메이션 대상") List<String> unlockedQuestIds,
-            @Schema(description = "화면 5 레이더 갱신용. 재조회 없이 반영") List<RadarEntry> radar
+            @Schema(description = "완료 처리된 퀘스트 정보입니다") CompletedQuestInfo quest,
+            @Schema(description = "완료에 따른 캐릭터 변화 정보입니다") CharacterChanges characterChanges,
+            @Schema(description = "완료 직후 잠금 해제된 퀘스트 ID 목록입니다. 화면 4-1에서 잠금 해제 애니메이션을 적용할 대상이며, 빈 배열이면 해제된 퀘스트가 없습니다") List<String> unlockedQuestIds,
+            @Schema(description = "화면 5 레이더 차트 갱신용 데이터입니다. 이 값을 사용하면 재조회 없이 즉시 반영할 수 있습니다") List<RadarEntry> radar
     ) {}
 
     @Schema(name = "CompletedQuestInfo")
@@ -383,26 +390,26 @@ public class QuestController {
 
     @Schema(name = "CharacterChanges")
     record CharacterChanges(
-            @Schema(description = "갱신된 완료율", example = "84") int completionRate,
-            @Schema(description = "갱신된 성장 단계 숫자", example = "4") int stage,
-            @Schema(description = "갱신된 성장 단계 라벨", example = "완성") String stageLabel,
-            @Schema(description = "현재 진행 중인 레벨", example = "5") int level,
-            @Schema(description = "다음 퀘스트. 모든 퀘스트 완료 시 null")
+            @Schema(description = "갱신된 완료율(%)입니다", example = "84") int completionRate,
+            @Schema(description = "갱신된 성장 단계 숫자입니다. 0~4 범위이며 절대 감소하지 않습니다", example = "4") int stage,
+            @Schema(description = "갱신된 성장 단계 라벨입니다. 시작·성장·숙련·완성 중 하나입니다", example = "완성") String stageLabel,
+            @Schema(description = "현재 진행 중인 레벨입니다", example = "5") int level,
+            @Schema(description = "다음 권장 퀘스트입니다. 모든 퀘스트를 완료했으면 null입니다", nullable = true)
             CharacterController.NextQuestResponse nextQuest
     ) {}
 
     @Schema(name = "RadarEntry")
     record RadarEntry(
-            @Schema(description = "역량 축 코드. enum이 아닌 자유 문자열", example = "programming") String axisCode,
-            @Schema(description = "역량 축 이름", example = "프로그래밍 기초") String axisName,
-            @Schema(description = "화면 5 역량 다각형(레이더) 축 값. 단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100", example = "72") int percent
+            @Schema(description = "역량 축 코드입니다. enum이 아닌 자유 문자열입니다", example = "programming") String axisCode,
+            @Schema(description = "역량 축 이름입니다", example = "프로그래밍 기초") String axisName,
+            @Schema(description = "화면 5 역량 다각형(레이더) 축 값입니다. 계산식: (DONE+ALREADY_KNOWN) / 전체 × 100", example = "72") int percent
     ) {}
 
     @Schema(name = "AiEnhancementRequest")
     record AiEnhancementRequest(
-            @Schema(description = "AI 보완 대상 STAR 원문") StarInput star,
-            @Schema(description = "로케일", example = "ko-KR") String locale,
-            @Schema(description = "문체 스타일", example = "concise-professional") String style
+            @Schema(description = "AI 보완을 요청할 STAR 원문입니다. 각 필드 최대 2000자") StarInput star,
+            @Schema(description = "결과물 언어 로케일입니다", example = "ko-KR") String locale,
+            @Schema(description = "자기소개서 초안 문체 스타일입니다", example = "concise-professional") String style
     ) {}
 
     @Schema(name = "AiEnhancementAcceptedResponse")

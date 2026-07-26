@@ -28,7 +28,13 @@ public class StarController {
 
     @Operation(
             summary = "경험 카드(STAR 기록) 목록 조회",
-            description = "화면 5(대시보드) 경험 카드 목록. 커서 기반 페이지네이션(OFFSET 금지)."
+            description = """
+                    화면 5(대시보드)의 경험 카드 목록을 조회합니다.
+                    커서 기반 페이지네이션을 사용합니다(OFFSET 방식 미지원).
+                    nextCursor가 null이거나 hasNext가 false이면 더 불러올 데이터가 없습니다.
+                    axis 파라미터로 특정 역량 축만 필터링할 수 있습니다. 생략하면 전체를 반환합니다.
+                    completeness: complete는 STAR 4칸 모두 입력된 카드만, partial은 일부만 입력된 카드만 반환합니다.
+                    카드의 questId를 이용해 퀘스트 상세(GET /api/quests/{questId})로 이동할 수 있습니다."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
             content = @Content(mediaType = "application/json",
@@ -90,12 +96,12 @@ public class StarController {
     @Schema(name = "ExperienceCardResponse")
     record ExperienceCardResponse(
             @Schema(description = "경험 카드 ID", example = "exp_01") String experienceId,
-            @Schema(description = "퀘스트 ID. 카드 클릭 시 퀘스트 상세로 이동", example = "qst_02") String questId,
+            @Schema(description = "퀘스트 ID입니다. 카드 클릭 시 GET /api/quests/{questId}로 퀘스트 상세 화면으로 이동하세요", example = "qst_02") String questId,
             @Schema(description = "퀘스트 제목", example = "언어 기초로 토이앱을 만든다") String title,
             @Schema(description = "역량 축 코드", example = "programming") String axisCode,
             @Schema(description = "역량 축 이름", example = "프로그래밍 기초") String axisName,
-            @Schema(description = "NCS 능력단위명. 퀘스트의 NCS 능력단위명 재사용", example = "프로그래밍언어활용") String ncsUnitName,
-            @Schema(description = "STAR 기록") QuestController.StarResponse star,
-            @Schema(description = "생성일", example = "2026-07-22T05:00:00Z") String createdAt
+            @Schema(description = "NCS 능력단위명입니다. 퀘스트의 NCS 능력단위명을 그대로 표시하며, 없으면 null입니다", nullable = true, example = "프로그래밍언어활용") String ncsUnitName,
+            @Schema(description = "STAR 기록입니다") QuestController.StarResponse star,
+            @Schema(description = "STAR 최초 저장일", example = "2026-07-22T05:00:00Z") String createdAt
     ) {}
 }

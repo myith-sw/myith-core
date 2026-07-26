@@ -27,10 +27,14 @@ public class HeartbeatController {
     @Operation(
             summary = "하트비트",
             description = """
-                    Electron 상주 앱 전용이다. 웹 프론트는 호출하지 않는다.
-                    서버는 마지막 실제 서비스 활동 시각 기준으로 48시간 미접속을 판정해 nudge: true로 응답한다.
-                    heartbeat 자체는 활동 시각을 갱신하지 않는다(갱신하면 48시간이 영원히 지나지 않는다).
-                    캐릭터가 없으면 characterState: null."""
+                    Electron 상주 앱 전용입니다. 웹 프론트에서는 호출하지 않습니다.
+                    앱 실행 중 일정 주기(예: 30초)마다 호출해 서버에 생존을 알립니다.
+
+                    서버는 마지막 실제 서비스 활동 시각(last_active_at) 기준으로 48시간 미접속을 판정해 nudge: true로 응답합니다.
+                    heartbeat 자체는 활동 시각을 갱신하지 않습니다. (갱신하면 48시간 판정이 동작하지 않습니다.)
+
+                    nudge가 true이면 트레이 아이콘에 알림 배지를 표시하거나 복귀 유도 알림을 띄우세요.
+                    characterState가 null이면 아직 캐릭터를 생성하지 않은 상태입니다. 트레이 아이콘을 기본 이미지로 표시하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "응답",
             content = @Content(mediaType = "application/json",
@@ -64,19 +68,19 @@ public class HeartbeatController {
 
     @Schema(name = "HeartbeatResponse")
     record HeartbeatResponse(
-            @Schema(description = "48시간 미접속 판정 결과. true면 앱이 nudge UI를 표시한다", example = "true")
+            @Schema(description = "48시간 미접속 판정 결과입니다. true이면 트레이 알림 또는 복귀 유도 UI를 표시하세요.", example = "true")
             boolean nudge,
-            @Schema(description = "캐릭터 상태. 캐릭터가 없으면 null")
+            @Schema(description = "캐릭터 상태입니다. 캐릭터를 아직 생성하지 않았으면 null입니다.")
             CharacterStateResponse characterState
     ) {}
 
     @Schema(name = "CharacterStateResponse")
     record CharacterStateResponse(
-            @Schema(description = "캐릭터 종류. 앱 트레이 아이콘용", example = "deokbaseu")
+            @Schema(description = "캐릭터 종류입니다. 트레이 아이콘 이미지 경로를 {species}-{stage}.png 형태로 조합해 사용하세요.", example = "deokbaseu")
             String species,
-            @Schema(description = "성장 단계 숫자. 앱 트레이 이미지 {species}-{stage}.png", example = "4")
+            @Schema(description = "성장 단계 숫자입니다(1~4). species와 조합해 트레이 아이콘 이미지를 선택하세요.", example = "4")
             int stage,
-            @Schema(description = "완료율. 앱 트레이 진행률 표시", example = "80")
+            @Schema(description = "완료율(%)입니다. 트레이 툴팁 또는 진행률 표시에 사용하세요.", example = "80")
             int completionRate
     ) {}
 }

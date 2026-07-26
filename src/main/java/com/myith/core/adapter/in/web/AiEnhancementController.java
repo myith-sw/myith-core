@@ -25,9 +25,14 @@ public class AiEnhancementController {
     @Operation(
             summary = "AI 보완 결과 조회",
             description = """
-                    POST /api/quests/{questId}/ai-enhancements에서 202 수신 후 프론트가 짧은 간격으로 폴링한다.
-                    enhancedStar → 비교 모달 오른쪽 / feedback → 항목별 힌트 / resumeDraft → 자기소개서 초안 영역.
-                    서버는 원문을 수정하지 않는다. 사용자가 '적용'을 누르면 프론트가 textarea를 채우고 PUT /star로 저장한다."""
+                    화면 4-2에서 POST /api/quests/{questId}/ai-enhancements로 202를 수신한 뒤, 1~2초 간격으로 폴링하여 결과를 확인하세요.
+                    status가 PROCESSING이면 계속 폴링하고, COMPLETED 또는 FAILED이면 폴링을 종료하세요.
+                    COMPLETED 시 각 필드 활용법은 다음과 같습니다.
+                    - enhancedStar: 비교 모달 오른쪽(AI 제안)에 표시합니다. PROCESSING이면 null입니다.
+                    - feedback: 항목별 개선 힌트 목록입니다. 빈 배열이면 힌트 섹션을 숨기세요.
+                    - resumeDraft: 자기소개서 초안 영역에 표시합니다.
+                    서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /star로 저장하세요.
+                    FAILED 시 errorCode를 참고해 적절한 안내 문구를 표시하세요."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리 중",
@@ -88,15 +93,15 @@ public class AiEnhancementController {
     @Schema(name = "AiEnhancementResultResponse")
     record AiEnhancementResultResponse(
             @Schema(description = "요청 ID", example = "aie_01J3ABC") String requestId,
-            @Schema(description = "퀘스트 ID. COMPLETED 시에만 포함", example = "qst_05") String questId,
-            @Schema(description = "처리 상태", example = "COMPLETED",
+            @Schema(description = "퀘스트 ID입니다. COMPLETED 상태일 때만 포함됩니다", nullable = true, example = "qst_05") String questId,
+            @Schema(description = "처리 상태입니다. PROCESSING이면 폴링을 계속하고, COMPLETED 또는 FAILED이면 종료하세요", example = "COMPLETED",
                     allowableValues = {"PROCESSING", "COMPLETED", "FAILED"}) String status,
-            @Schema(description = "화면 4-2 AI 비교 모달 오른쪽. COMPLETED 시에만 포함. status가 PROCESSING이면 null", nullable = true) EnhancedStar enhancedStar,
-            @Schema(description = "화면 4-2 항목별 개선 힌트. COMPLETED 시에만 포함") List<FeedbackEntry> feedback,
-            @Schema(description = "화면 4-2·5 자기소개서 초안 영역. COMPLETED 시에만 포함",
-                    example = "대용량 조회 성능 문제를 캐시 도입으로 해결한 경험이 있습니다. ...") String resumeDraft,
-            @Schema(description = "FAILED 시 오류 코드", example = "AI_PROVIDER_TIMEOUT") String errorCode,
-            @Schema(description = "생성 시각", example = "2026-07-24T03:25:00Z") String createdAt
+            @Schema(description = "화면 4-2 AI 비교 모달 오른쪽에 표시할 보완된 STAR입니다. COMPLETED일 때만 포함되며, PROCESSING이면 null입니다", nullable = true) EnhancedStar enhancedStar,
+            @Schema(description = "화면 4-2 항목별 개선 힌트 목록입니다. COMPLETED일 때만 포함됩니다. 빈 배열이면 힌트 섹션을 숨기세요") List<FeedbackEntry> feedback,
+            @Schema(description = "화면 4-2·5 자기소개서 초안 영역에 표시할 텍스트입니다. COMPLETED일 때만 포함됩니다",
+                    nullable = true, example = "대용량 조회 성능 문제를 캐시 도입으로 해결한 경험이 있습니다. ...") String resumeDraft,
+            @Schema(description = "FAILED 상태일 때 오류 코드입니다. 해당 코드에 맞는 안내 문구를 표시하세요", nullable = true, example = "AI_PROVIDER_TIMEOUT") String errorCode,
+            @Schema(description = "AI 보완 결과 생성 시각", example = "2026-07-24T03:25:00Z") String createdAt
     ) {}
 
     @Schema(name = "EnhancedStar")
@@ -109,9 +114,9 @@ public class AiEnhancementController {
 
     @Schema(name = "FeedbackEntry")
     record FeedbackEntry(
-            @Schema(description = "피드백 대상 STAR 필드", example = "action",
+            @Schema(description = "피드백 대상 STAR 필드입니다. 해당 입력칸에 힌트를 표시하세요", example = "action",
                     allowableValues = {"situation", "task", "action", "result"}) String field,
-            @Schema(description = "지적 사항", example = "'캐시 적용'이 추상적입니다") String issue,
-            @Schema(description = "개선 제안", example = "어떤 데이터에 어떤 캐시를 적용했는지 구체화하세요") String suggestion
+            @Schema(description = "지적 사항입니다", example = "'캐시 적용'이 추상적입니다") String issue,
+            @Schema(description = "개선 제안입니다", example = "어떤 데이터에 어떤 캐시를 적용했는지 구체화하세요") String suggestion
     ) {}
 }

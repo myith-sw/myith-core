@@ -35,9 +35,14 @@ public class DashboardController {
     @Operation(
             summary = "대시보드 조회",
             description = """
-                    화면 5(대시보드/신화 페이지).
-                    radar는 배열이다. 축 개수가 직무마다 다르므로 고정 키 객체로 만들지 않는다.
-                    percent는 단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100이다. 가중평균이 아니다."""
+                    화면 5(대시보드/신화 페이지)에서 호출합니다.
+                    로드맵 상세 → 대시보드 탭 진입 시, 또는 퀘스트 완료 후 대시보드로 돌아올 때 호출하세요.
+
+                    radar는 배열입니다. 축 개수가 직무마다 4~7개로 가변이므로 고정 키 객체로 만들지 마세요.
+                    percent는 단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100입니다. 가중평균이 아닙니다.
+
+                    skillTree는 레벨별로 퀘스트를 묶은 구조입니다. 각 퀘스트의 status에 따라 잠금/활성/완료 표시를 다르게 렌더링하세요.
+                    experienceCards는 STAR가 작성된 퀘스트만 포함됩니다. 카드가 없으면 빈 배열([])이 반환됩니다."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
             content = @Content(mediaType = "application/json",
@@ -134,9 +139,14 @@ public class DashboardController {
     @Operation(
             summary = "로드맵 내보내기",
             description = """
-                    format=md: 자소서 생성용 프롬프트 문서 (Content-Type: text/markdown; charset=utf-8).
-                    format=pdf: 원본 STAR 열람용 PDF (Content-Type: application/pdf, 한글 폰트 임베딩).
-                    대상: 해당 로드맵의 star IS NOT NULL인 경험 카드 전체(완성도 무관)."""
+                    대시보드 하단 '내보내기' 버튼에서 호출합니다.
+
+                    format=md: 자소서 생성용 프롬프트 문서를 다운로드합니다 (Content-Type: text/markdown; charset=utf-8).
+                    format=pdf: 원본 STAR 열람용 PDF를 다운로드합니다 (Content-Type: application/pdf, 한글 폰트 임베딩).
+                    대상: 해당 로드맵의 STAR가 작성된 경험 카드 전체입니다(완성도 무관).
+
+                    응답 헤더 Content-Disposition에서 파일명을 꺼내 브라우저 다운로드로 처리하세요.
+                    STAR 기록이 하나도 없으면 409(NO_EXPORTABLE_EXPERIENCE)가 반환됩니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
@@ -191,38 +201,45 @@ public class DashboardController {
 
     @Schema(name = "DashboardResponse")
     record DashboardResponse(
-            @Schema(description = "화면 5 캐릭터 정보") DashboardCharacterResponse character,
-            @Schema(description = "화면 5 역량 다각형(레이더). 배열이다. 축 개수는 직무마다 4~7개 가변") List<QuestController.RadarEntry> radar,
-            @Schema(description = "화면 5 스킬 트리") List<SkillTreeLevelResponse> skillTree,
-            @Schema(description = "화면 5 경험 카드 목록") List<StarController.ExperienceCardResponse> experienceCards,
-            @Schema(description = "최근 갱신 시각", example = "2026-07-24T03:00:00Z") String updatedAt
+            @Schema(description = "캐릭터 정보입니다. 화면 상단 캐릭터 카드 렌더링에 사용합니다.") DashboardCharacterResponse character,
+            @Schema(description = "역량 다각형(레이더) 데이터입니다. 배열이며 축 개수는 직무마다 4~7개 가변입니다. 고정 키 객체로 파싱하지 마세요.") List<QuestController.RadarEntry> radar,
+            @Schema(description = "레벨별 퀘스트 목록입니다. 스킬 트리 UI를 렌더링할 때 사용합니다.") List<SkillTreeLevelResponse> skillTree,
+            @Schema(description = "STAR가 작성된 경험 카드 목록입니다. STAR 기록이 없으면 빈 배열([])이 반환됩니다.") List<StarController.ExperienceCardResponse> experienceCards,
+            @Schema(description = "스냅샷 최근 갱신 시각(ISO 8601 UTC)입니다.", example = "2026-07-24T03:00:00Z") String updatedAt
     ) {}
 
     @Schema(name = "DashboardCharacterResponse")
     record DashboardCharacterResponse(
-            @Schema(description = "화면 5 캐릭터 닉네임", example = "견습 서버 개발자") String nickname,
-            @Schema(description = "화면 5 직무명", example = "백엔드 개발자") String jobName,
-            @Schema(description = "캐릭터 종류", example = "deokbaseu") String species,
-            @Schema(description = "성장 단계 숫자", example = "4") int stage,
-            @Schema(description = "성장 단계 라벨", example = "완성") String stageLabel,
-            @Schema(description = "완료율 %", example = "80") int completionRate,
-            @Schema(description = "완료한 퀘스트 수", example = "7") int completedQuestCount,
-            @Schema(description = "현재 진행 중인 레벨", example = "4") int level
+            @Schema(description = "캐릭터 닉네임입니다. null이면 species 기반 기본 이름을 사용하세요.", example = "견습 서버 개발자") String nickname,
+            @Schema(description = "직무명입니다.", example = "백엔드 개발자") String jobName,
+            @Schema(description = "캐릭터 종류입니다. 이미지 경로 /characters/{species}-{stage}.png 형태로 조합하세요.", example = "deokbaseu") String species,
+            @Schema(description = "성장 단계 숫자입니다(1~4). stage와 stageLabel을 함께 사용하세요.", example = "4") int stage,
+            @Schema(description = "성장 단계 라벨입니다. 시작·성장·숙련·완성 중 하나입니다.", example = "완성") String stageLabel,
+            @Schema(description = "완료율(%)입니다. DONE+ALREADY_KNOWN 기준입니다.", example = "80") int completionRate,
+            @Schema(description = "완료한 퀘스트 수입니다.", example = "7") int completedQuestCount,
+            @Schema(description = "현재 진행 중인 레벨입니다.", example = "4") int level
     ) {}
 
     @Schema(name = "SkillTreeLevelResponse")
     record SkillTreeLevelResponse(
-            @Schema(description = "레벨", example = "1") int level,
-            @Schema(description = "해당 레벨 퀘스트 목록") List<SkillTreeQuestResponse> quests
+            @Schema(description = "레벨 번호입니다.", example = "1") int level,
+            @Schema(description = "해당 레벨의 퀘스트 목록입니다.") List<SkillTreeQuestResponse> quests
     ) {}
 
     @Schema(name = "SkillTreeQuestResponse")
     record SkillTreeQuestResponse(
-            @Schema(description = "퀘스트 ID", example = "qst_01") String questId,
-            @Schema(description = "퀘스트 제목", example = "버전관리로 협업한다") String title,
-            @Schema(description = "역량 축 코드", example = "collaboration") String axisCode,
-            @Schema(description = "역량 축 이름", example = "협업·형상관리") String axisName,
-            @Schema(description = "상태", example = "DONE",
+            @Schema(description = "퀘스트 ID입니다.", example = "qst_01") String questId,
+            @Schema(description = "퀘스트 제목입니다.", example = "버전관리로 협업한다") String title,
+            @Schema(description = "역량 축 코드입니다.", example = "collaboration") String axisCode,
+            @Schema(description = "역량 축 이름입니다.", example = "협업·형상관리") String axisName,
+            @Schema(description = """
+                    퀘스트 상태입니다.
+                    LOCKED: 선행 퀘스트 미완료로 잠긴 상태.
+                    OPEN: 수행 가능.
+                    PENDING: STAR 피드백 대기 중.
+                    DONE: 완료.
+                    ALREADY_KNOWN: 사전 역량 보유(자가진단 mastery ≥ 0.66)로 자동 완료 처리됩니다. 접힌 상태로 표시하세요.""",
+                    example = "DONE",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status
     ) {}
 }

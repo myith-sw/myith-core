@@ -21,9 +21,10 @@ public class HealthController {
     @Operation(
             summary = "헬스체크",
             description = """
-                    서버 상태를 확인한다.
-                    이 엔드포인트는 data 래퍼를 사용하지 않는 유일한 엔드포인트다.
-                    모니터링 도구(AWS ALB, k8s probe 등) 호환을 위해 래퍼 없이 평문 JSON을 반환한다."""
+                    서버 상태를 확인합니다.
+                    이 엔드포인트는 data 래퍼를 사용하지 않는 유일한 엔드포인트입니다.
+                    모니터링 도구(AWS ALB, k8s probe 등) 호환을 위해 래퍼 없이 평문 JSON을 반환합니다.
+                    인증 토큰 없이 호출 가능합니다."""
     )
     @ApiResponse(responseCode = "200", description = "서버 정상",
             content = @Content(mediaType = "application/json",

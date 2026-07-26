@@ -28,13 +28,36 @@ import java.util.concurrent.ConcurrentHashMap;
                 title = "MYiTH Core API",
                 version = "0.1.0",
                 description = """
-                        채용공고와 국가직무능력표준(NCS)을 결합한 개인 맞춤형 취업 로드맵 서비스.
+                        채용공고와 국가직무능력표준(NCS)을 결합한 개인 맞춤형 취업 로드맵 서비스입니다.
 
-                        인증: Google ID Token으로 로그인 후 발급받은 accessToken을
-                        Authorization: Bearer {token} 헤더에 실어 보낸다.
+                        ## 인증
+                        `POST /api/auth/google` 에 Google ID Token을 전달해 `accessToken`과 `refreshToken`을 발급받습니다.
+                        이후 모든 인증 필요 요청에는 `Authorization: Bearer {accessToken}` 헤더를 포함해야 합니다.
+                        `accessToken` 만료 시 `POST /api/auth/refresh` 로 재발급합니다.
 
-                        공통 응답: 모든 성공 응답은 data로 감싼다. (GET /api/health 제외)
-                        공통 오류: { "error": { code, message, fieldErrors, requestId } }
+                        ## 공통 성공 응답
+                        모든 성공 응답은 아래 구조로 감쌉니다. (`GET /api/health` 제외)
+                        ```json
+                        { "data": { ... }, "meta": null }
+                        ```
+                        목록 조회 시 `meta` 에 커서 페이지네이션 정보가 포함됩니다.
+                        ```json
+                        { "data": [...], "meta": { "nextCursor": "...", "hasNext": true } }
+                        ```
+
+                        ## 공통 에러 응답
+                        모든 에러는 아래 구조를 사용합니다.
+                        ```json
+                        { "error": { "code": "QUEST_LOCKED", "message": "선행 퀘스트를 먼저 완료해주세요.", "fieldErrors": null, "requestId": "req_01J3ABC" } }
+                        ```
+                        - `code`: 에러 식별자 (클라이언트 분기 처리용)
+                        - `message`: 사용자에게 그대로 노출 가능한 한국어 메시지
+                        - `fieldErrors`: 422 유효성 검사 실패 시 필드별 오류 맵, 그 외 `null`
+                        - `requestId`: 로그 추적용 요청 ID
+
+                        ## ID 체계
+                        모든 리소스 ID는 접두사가 붙은 문자열입니다. (예: `rdm_01J3ABC`, `qst_01J3DEF`, `chr_01J3GHI`)
+                        숫자 타입이 아님에 유의하세요.
                         """
         ),
         servers = {

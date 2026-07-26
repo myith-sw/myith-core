@@ -472,3 +472,13 @@ Worker 작업을 만나면: (1) 멈추고 (2) `docs/handoff-to-worker.md`에 기
 ```
 
 테스트 필수: M값 병합, 조립(선후관계·Priority), 완료율·stage(퇴화 방지), 레이더, 낙관적 락, 스냅샷 멱등성, Outbox 롤백, 이벤트 멱등 소비, 정합성 스케줄러 폴백.
+
+---
+
+## 인프라 운영
+
+"서버 켜줘/꺼줘/배포해줘" 요청 시 아래 파일을 읽고 지시를 따른다:
+
+```
+/Users/sungyoon/Desktop/sw-contest/myith-infra/myith-infra/OPS.md
+```
