@@ -10,10 +10,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import com.myith.core.common.IdCodec;
 
 import java.util.List;
 
@@ -92,6 +91,48 @@ public class CharacterController {
             );
         }).toList();
         return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    // ────────────────── DELETE /api/characters/{characterId} ──────────────────
+
+    @Operation(
+            summary = "캐릭터 삭제 (로드맵 보관 처리)",
+            description = """
+                    화면 1-2에서 캐릭터 삭제 버튼을 누를 때 호출합니다.
+                    캐릭터와 연결된 로드맵이 ARCHIVED 상태로 전환됩니다.
+                    STAR 기록은 보존되며, 캐릭터 목록에서 더 이상 표시되지 않습니다.
+                    이미 ARCHIVED된 캐릭터를 다시 삭제하면 무시됩니다(멱등).
+                    삭제 후 캐릭터 목록을 다시 조회하세요."""
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "삭제(보관) 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "캐릭터를 찾을 수 없음",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "error": {
+                                        "code": "NOT_FOUND",
+                                        "message": "캐릭터를 찾을 수 없습니다.",
+                                        "requestId": "req_01J3ABC"
+                                      }
+                                    }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "다른 사용자의 캐릭터",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "error": {
+                                        "code": "FORBIDDEN_RESOURCE",
+                                        "message": "접근 권한이 없습니다.",
+                                        "requestId": "req_01J3ABC"
+                                      }
+                                    }""")))
+    })
+    @DeleteMapping("/{characterId}")
+    public ResponseEntity<Void> deleteCharacter(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable String characterId) {
+        roadmapQueryService.archiveByCharacterId(userId, IdCodec.decode(characterId));
+        return ResponseEntity.noContent().build();
     }
 
     private int stageToNumber(String stage) {

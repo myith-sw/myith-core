@@ -185,6 +185,28 @@ public class RoadmapQueryService {
         };
     }
 
+    /**
+     * 캐릭터 삭제: 연결된 로드맵을 ARCHIVED로 전환한다. STAR 기록은 보존된다.
+     */
+    @Transactional
+    public void archiveByCharacterId(Long userId, Long characterId) {
+        Character character = characterRepository.findByUserId(userId).stream()
+                .filter(c -> c.getId().equals(characterId))
+                .findFirst()
+                .orElseThrow(() -> new CharacterNotFoundException(characterId));
+
+        Roadmap roadmap = roadmapRepository.findById(character.getRoadmapId())
+                .orElseThrow(() -> new RoadmapNotFoundException(character.getRoadmapId()));
+        validateOwnership(roadmap, userId);
+
+        roadmap.archive();
+        roadmapRepository.save(roadmap);
+    }
+
+    public static class CharacterNotFoundException extends RuntimeException {
+        public CharacterNotFoundException(Long id) { super("Character not found: " + id); }
+    }
+
     public static void validateOwnership(Roadmap roadmap, Long userId) {
         if (!roadmap.getUserId().equals(userId)) {
             throw new RoadmapAccessDeniedException(roadmap.getId());

@@ -71,6 +71,12 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("NOT_FOUND", e.getMessage(), requestId()));
     }
 
+    @ExceptionHandler(RoadmapQueryService.CharacterNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCharacterNotFound(RoadmapQueryService.CharacterNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("NOT_FOUND", "캐릭터를 찾을 수 없습니다.", requestId()));
+    }
+
     @ExceptionHandler(RoadmapQueryService.RoadmapAccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleRoadmapAccessDenied(RoadmapQueryService.RoadmapAccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
