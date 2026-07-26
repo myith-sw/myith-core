@@ -42,6 +42,8 @@ public class HeartbeatController {
                             {
                               "data": {
                                 "nudge": true,
+                                "nudgeType": "ABSENCE_48H",
+                                "nudgeMessage": "이틀 동안 못 봤어요. 오늘 퀘스트 하나만 해볼까요?",
                                 "characterState": {
                                   "species": "deokbaseu",
                                   "stage": 4,
@@ -55,6 +57,8 @@ public class HeartbeatController {
         HeartbeatService.HeartbeatResult result = heartbeatService.heartbeat(userId);
         HeartbeatResponse response = new HeartbeatResponse(
                 result.nudge(),
+                result.nudgeType(),
+                result.nudgeMessage(),
                 result.characterState() != null
                         ? new CharacterStateResponse(
                         result.characterState().species(),
@@ -70,6 +74,10 @@ public class HeartbeatController {
     record HeartbeatResponse(
             @Schema(description = "48시간 미접속 판정 결과입니다. true이면 트레이 알림 또는 복귀 유도 UI를 표시하세요.", example = "true")
             boolean nudge,
+            @Schema(description = "넛지 종류. nudge=false이면 null", allowableValues = {"ABSENCE_48H"}, nullable = true)
+            String nudgeType,
+            @Schema(description = "화면에 표시할 문구. 서버가 소유하므로 클라이언트에서 하드코딩하지 마세요.", nullable = true)
+            String nudgeMessage,
             @Schema(description = "캐릭터 상태입니다. 캐릭터를 아직 생성하지 않았으면 null입니다.", nullable = true)
             CharacterStateResponse characterState
     ) {}
@@ -78,7 +86,7 @@ public class HeartbeatController {
     record CharacterStateResponse(
             @Schema(description = "캐릭터 종류입니다. 트레이 아이콘 이미지 경로를 {species}-{stage}.png 형태로 조합해 사용하세요.", example = "deokbaseu")
             String species,
-            @Schema(description = "성장 단계 숫자입니다(1~4). species와 조합해 트레이 아이콘 이미지를 선택하세요.", example = "4")
+            @Schema(description = "캐릭터 성장 단계이며 퀘스트 난이도 레벨(level)과 다른 축입니다. 1~4 범위입니다. species와 조합해 트레이 아이콘 이미지를 선택하세요.", example = "4")
             int stage,
             @Schema(description = "완료율(%)입니다. 트레이 툴팁 또는 진행률 표시에 사용하세요.", example = "80")
             int completionRate

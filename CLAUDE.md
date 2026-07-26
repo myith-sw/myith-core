@@ -379,8 +379,22 @@ GET /api/roadmaps/{id}/export?format=md|pdf  → 파일 다운로드
 ## F-10. 데스크톱 앱
 
 ```
-POST /api/heartbeat → { nudge, characterState:{ species, stage, completionRate }|null }
+POST /api/heartbeat → { nudge, nudgeType?, nudgeMessage?, characterState:{ species, stage, completionRate }|null }
 ```
+
+nudge=true일 때 nudgeType(종류)과 nudgeMessage(표시 문구)를 함께 반환한다. Electron은 이 문구를 그대로 표시한다.
+
+## F-11. 시연 전용
+
+```
+POST /api/demo/nudge   Header: X-Demo-Token
+  { userId, nudgeType }
+→ 200 { queued, deliverWithinSeconds }
+→ 403 데모 모드 꺼짐 또는 토큰 불일치
+```
+
+`myith.demo.enabled=true`일 때만 빈이 등록된다. 기본 꺼짐.
+다음 heartbeat 호출 시 해당 userId에 대해 1회성 nudge를 반환한다.
 
 ---
 
@@ -397,6 +411,7 @@ POST /api/heartbeat → { nudge, characterState:{ species, stage, completionRate
 ```
 
 발행: `RoadmapGenerationRequested`, `JobProfileBuildRequested`, `AiEnhancementRequested`
+소비: `RoadmapGenerationProgress`, `CompetencyExtracted`, `JobProfileBuilt`, `AiEnhancementCompleted`, `StarFeedbackCompleted`(레거시, 큐 잔여 소진용)
 소비: `RoadmapGenerationProgress`, `CompetencyExtracted`, `JobProfileBuilt`, `AiEnhancementCompleted`
 
 ### RoadmapGenerationRequested payload

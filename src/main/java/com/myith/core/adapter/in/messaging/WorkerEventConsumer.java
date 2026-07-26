@@ -70,6 +70,8 @@ public class WorkerEventConsumer {
                 case "RoadmapGenerationProgress" -> handleProgress(roadmapId, payload);
                 case "CompetencyExtracted" -> handleCompetencyExtracted(eventId, roadmapId);
                 case "JobProfileBuilt" -> handleJobProfileBuilt(eventId, payload);
+                // LEGACY: Worker는 AiEnhancementCompleted로 대체 발행한다.
+                // 큐에 남은 구 메시지 소진용으로만 유지. 2026-08 이후 제거 가능.
                 case "StarFeedbackCompleted" -> handleStarFeedback(roadmapId, payload);
                 case "AiEnhancementCompleted" -> handleAiEnhancementCompleted(eventId, payload);
                 default -> log.debug("Unknown worker event type: {}", eventType);

@@ -21,6 +21,8 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+    repair-on-migrate: true
+    ignore-migration-patterns: "*:missing"
 
   data:
     redis:
@@ -101,6 +103,14 @@ policy:
   upload:
     max-size-bytes: ${UPLOAD_MAX_SIZE:10485760}
     allowed-extensions: pdf,zip,tar.gz
+
+myith:
+  nudge:
+    messages:
+      ABSENCE_48H: "이틀 동안 못 봤어요. 오늘 퀘스트 하나만 해볼까요?"
+  demo:
+    enabled: ${MYITH_DEMO_ENABLED:false}
+    token: ${MYITH_DEMO_TOKEN:}
 
 # Swagger
 springdoc:

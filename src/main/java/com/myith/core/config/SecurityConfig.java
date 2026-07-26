@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/health",
                                 "/api/auth/**",
+                                "/api/demo/**",
                                 "/api-docs/**",
                                 "/v3/api-docs/**",
                                 "/v3/api-docs.yaml",

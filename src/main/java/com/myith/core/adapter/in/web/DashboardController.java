@@ -214,7 +214,7 @@ public class DashboardController {
             @Schema(description = "직무명입니다.", example = "백엔드 개발자") String jobName,
             @Schema(description = "캐릭터 종류입니다. 이미지 경로 /characters/{species}-{stage}.png 형태로 조합하세요.", example = "deokbaseu") String species,
             @Schema(description = "성장 단계 숫자입니다(1~4). stage와 stageLabel을 함께 사용하세요.", example = "4") int stage,
-            @Schema(description = "성장 단계 라벨입니다. 시작·성장·숙련·완성 중 하나입니다.", example = "완성") String stageLabel,
+            @Schema(description = "성장 단계 라벨입니다. 시작·성장·숙련·완성 중 하나입니다.", allowableValues = {"시작", "성장", "숙련", "완성"}, example = "완성") String stageLabel,
             @Schema(description = "완료율(%)입니다. DONE+ALREADY_KNOWN 기준입니다.", example = "80") int completionRate,
             @Schema(description = "완료한 퀘스트 수입니다.", example = "7") int completedQuestCount,
             @Schema(description = "현재 진행 중인 레벨입니다.", example = "4") int level
