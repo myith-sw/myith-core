@@ -142,8 +142,9 @@ public class QuestController {
         questDetailService.saveStar(userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
+        StarInput s = request.star();
         return ResponseEntity.ok(ApiResponse.of(new SaveStarResponse(
-                questId, request.star(),
+                questId, new StarResponse(s.situation(), s.task(), s.action(), s.result()),
                 request.source() != null ? request.source() : "manual",
                 "PENDING", null
         )));
@@ -306,7 +307,7 @@ public class QuestController {
                     allowableValues = {"SKILL", "ACTIVITY", "CUSTOM"}) String source,
             @Schema(description = "레벨 내 순서", example = "1") int order,
             @Schema(description = "낙관적 락 버전. PATCH /complete 호출 시 그대로 전달해야 합니다", example = "0") long version,
-            @Schema(description = "화면 4-2 '완료 기준' 박스에 표시합니다", example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
+            @Schema(description = "화면 4-2 '완료 기준' 박스에 표시합니다. CUSTOM 퀘스트는 null일 수 있으며, null이면 섹션을 숨기세요.", nullable = true, example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
             @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스에 표시합니다. source가 CUSTOM이면 null이므로 섹션 자체를 숨기세요", nullable = true) NcsUnitResponse ncsUnit,
             @Schema(description = "화면 4-2 '추천 자격' 목록입니다. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
             @Schema(description = "화면 4-2 STAR 입력칸 4개의 초기값입니다. null이면 빈 값으로 초기화하세요", nullable = true) StarResponse star,
@@ -357,7 +358,7 @@ public class QuestController {
     @Schema(name = "SaveStarResponse")
     record SaveStarResponse(
             @Schema(description = "퀘스트 ID", example = "qst_05") String questId,
-            @Schema(description = "저장된 STAR 기록") StarInput star,
+            @Schema(description = "저장된 STAR 기록") StarResponse star,
             @Schema(description = "저장 출처", example = "manual") String source,
             @Schema(description = "저장 후 퀘스트 상태입니다. 최초 저장 시 OPEN → PENDING으로 변경됩니다", example = "PENDING",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
@@ -391,7 +392,7 @@ public class QuestController {
     @Schema(name = "CharacterChanges")
     record CharacterChanges(
             @Schema(description = "갱신된 완료율(%)입니다", example = "84") int completionRate,
-            @Schema(description = "갱신된 성장 단계 숫자입니다. 0~4 범위이며 절대 감소하지 않습니다", example = "4") int stage,
+            @Schema(description = "갱신된 성장 단계 숫자입니다. 1~4 범위이며 절대 감소하지 않습니다", example = "4") int stage,
             @Schema(description = "갱신된 성장 단계 라벨입니다. 시작·성장·숙련·완성 중 하나입니다", example = "완성") String stageLabel,
             @Schema(description = "현재 진행 중인 레벨입니다", example = "5") int level,
             @Schema(description = "다음 권장 퀘스트입니다. 모든 퀘스트를 완료했으면 null입니다", nullable = true)

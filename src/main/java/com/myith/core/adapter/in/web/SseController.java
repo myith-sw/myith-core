@@ -40,7 +40,7 @@ public class SseController {
 
                     연결이 끊겨도 결과는 서버에 저장됩니다.
                     재접속 시 GET /api/roadmaps/{roadmapId}의 generationState 필드로 현재 상태를 확인하세요.
-                    generationState가 DONE이면 이미 완료된 상태입니다. SSE를 구독하지 않고 상세 화면으로 바로 이동하세요."""
+                    generationState가 READY이면 이미 완료된 상태입니다. SSE를 구독하지 않고 상세 화면으로 바로 이동하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
             description = "SSE 스트림",

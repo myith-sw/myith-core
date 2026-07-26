@@ -70,7 +70,7 @@ public class HeartbeatController {
     record HeartbeatResponse(
             @Schema(description = "48시간 미접속 판정 결과입니다. true이면 트레이 알림 또는 복귀 유도 UI를 표시하세요.", example = "true")
             boolean nudge,
-            @Schema(description = "캐릭터 상태입니다. 캐릭터를 아직 생성하지 않았으면 null입니다.")
+            @Schema(description = "캐릭터 상태입니다. 캐릭터를 아직 생성하지 않았으면 null입니다.", nullable = true)
             CharacterStateResponse characterState
     ) {}
 

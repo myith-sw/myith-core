@@ -91,6 +91,7 @@ public class UserController {
                     email → deleted_{id}@myith.local, google_id → null, nickname → 탈퇴한 사용자, profile_image_url → null 로 처리됩니다.
                     성공 시 204를 반환하며 바디는 없습니다. 이후 해당 계정으로 재로그인하면 신규 가입으로 처리됩니다.""")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "탈퇴 완료")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 실패 — 유효하지 않은 토큰")
     @DeleteMapping("/me")
     public ResponseEntity<Void> deleteMe(@AuthenticationPrincipal Long userId) {
         userService.deleteMe(userId);
@@ -114,7 +115,7 @@ public class UserController {
             String email,
             @Schema(description = "계정 닉네임입니다. 캐릭터 닉네임(character.nickname)과 별개입니다. 구글 가입 시 구글 이름으로 초기화됩니다.", example = "이성윤")
             String nickname,
-            @Schema(description = "프로필 이미지 URL입니다. null이면 기본 아바타를 표시합니다.", example = "null")
+            @Schema(description = "프로필 이미지 URL입니다. null이면 기본 아바타를 표시합니다.", nullable = true, example = "https://example.com/avatar.png")
             String profileImageUrl,
             @Schema(description = "가입 일시(ISO 8601 UTC)입니다.", example = "2026-07-01T00:00:00Z")
             String createdAt

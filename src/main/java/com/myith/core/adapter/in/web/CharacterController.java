@@ -114,7 +114,7 @@ public class CharacterController {
             String roadmapId,
             @Schema(description = "캐릭터 종류입니다. 알 선택 화면(1-1)에서 이미 보유한 종류를 비활성화할 때 사용합니다. 이미지 파일명 {species}-{stage}.png 조합에도 사용됩니다.", example = "deokbaseu")
             String species,
-            @Schema(description = "캐릭터 닉네임입니다. 화면 1-2 카드 큰 제목, 사이드바 첫 줄, 화면 4-1 상단에 표시합니다. null이면 미설정 상태이므로 기본 텍스트(예: '이름 없음')를 표시합니다.", example = "견습 서버 개발자")
+            @Schema(description = "캐릭터 닉네임입니다. 화면 1-2 카드 큰 제목, 사이드바 첫 줄, 화면 4-1 상단에 표시합니다. null이면 미설정 상태이므로 기본 텍스트(예: '이름 없음')를 표시합니다.", nullable = true, example = "견습 서버 개발자")
             String nickname,
             @Schema(description = "직무 코드입니다.", example = "server")
             String jobCode,
@@ -134,11 +134,11 @@ public class CharacterController {
             String stageLabel,
             @Schema(description = "현재 진행 중인 퀘스트의 레벨입니다. 화면 1-2에서 'Lv.{level}' 형식으로 표시합니다.", example = "4")
             int level,
-            @Schema(description = "다음 수행할 퀘스트 정보입니다. 화면 1-2 카드 '다음 퀘스트' 줄에 사용합니다. 모든 퀘스트가 완료된 경우 null이 반환되며, 완료 축하 메시지를 표시합니다.")
+            @Schema(description = "다음 수행할 퀘스트 정보입니다. 화면 1-2 카드 '다음 퀘스트' 줄에 사용합니다. 모든 퀘스트가 완료된 경우 null이 반환되며, 완료 축하 메시지를 표시합니다.", nullable = true)
             NextQuestResponse nextQuest,
-            @Schema(description = "캐릭터 생성 일시(ISO 8601 UTC)입니다.", example = "2026-07-20T02:00:00Z")
+            @Schema(description = "캐릭터 생성 일시(ISO 8601 UTC)입니다.", nullable = true, example = "2026-07-20T02:00:00Z")
             String createdAt,
-            @Schema(description = "마지막 수정 일시(ISO 8601 UTC)입니다.", example = "2026-07-24T03:00:00Z")
+            @Schema(description = "마지막 수정 일시(ISO 8601 UTC)입니다.", nullable = true, example = "2026-07-24T03:00:00Z")
             String updatedAt
     ) {}
 

@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,19 +33,18 @@ public class AiEnhancementController {
                     서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /star로 저장하세요.
                     FAILED 시 errorCode를 참고해 적절한 안내 문구를 표시하세요."""
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리 중",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(name = "PROCESSING", value = """
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+            description = "status 필드로 상태를 구분합니다. PROCESSING / COMPLETED / FAILED 세 가지입니다.",
+            content = @Content(mediaType = "application/json",
+                    examples = {
+                            @ExampleObject(name = "PROCESSING", summary = "처리 중", value = """
                                     {
                                       "data": {
                                         "requestId": "aie_01J3ABC",
                                         "status": "PROCESSING"
                                       }
-                                    }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "완료",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(name = "COMPLETED", value = """
+                                    }"""),
+                            @ExampleObject(name = "COMPLETED", summary = "완료", value = """
                                     {
                                       "data": {
                                         "requestId": "aie_01J3ABC",
@@ -68,18 +66,16 @@ public class AiEnhancementController {
                                         "resumeDraft": "대용량 조회 성능 문제를 캐시 도입으로 해결한 경험이 있습니다. ...",
                                         "createdAt": "2026-07-24T03:25:00Z"
                                       }
-                                    }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "실패",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(name = "FAILED", value = """
+                                    }"""),
+                            @ExampleObject(name = "FAILED", summary = "실패", value = """
                                     {
                                       "data": {
                                         "requestId": "aie_01J3ABC",
                                         "status": "FAILED",
                                         "errorCode": "AI_PROVIDER_TIMEOUT"
                                       }
-                                    }""")))
-    })
+                                    }""")
+                    }))
     @GetMapping("/{requestId}")
     public ResponseEntity<ApiResponse<AiEnhancementResultResponse>> getResult(
             @AuthenticationPrincipal Long userId,

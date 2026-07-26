@@ -210,7 +210,7 @@ public class DashboardController {
 
     @Schema(name = "DashboardCharacterResponse")
     record DashboardCharacterResponse(
-            @Schema(description = "캐릭터 닉네임입니다. null이면 species 기반 기본 이름을 사용하세요.", example = "견습 서버 개발자") String nickname,
+            @Schema(description = "캐릭터 닉네임입니다. null이면 species 기반 기본 이름을 사용하세요.", nullable = true, example = "견습 서버 개발자") String nickname,
             @Schema(description = "직무명입니다.", example = "백엔드 개발자") String jobName,
             @Schema(description = "캐릭터 종류입니다. 이미지 경로 /characters/{species}-{stage}.png 형태로 조합하세요.", example = "deokbaseu") String species,
             @Schema(description = "성장 단계 숫자입니다(1~4). stage와 stageLabel을 함께 사용하세요.", example = "4") int stage,
