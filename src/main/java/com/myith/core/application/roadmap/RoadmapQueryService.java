@@ -99,7 +99,20 @@ public class RoadmapQueryService {
     }
 
     public List<CharacterListDto> getCharacters(Long userId) {
-        List<Roadmap> activeRoadmaps = roadmapRepository.findActiveByUserId(userId);
+        return getCharacters(userId, "active");
+    }
+
+    public List<CharacterListDto> getCharacters(Long userId, String statusFilter) {
+        List<Roadmap> activeRoadmaps;
+        if ("archived".equals(statusFilter)) {
+            activeRoadmaps = roadmapRepository.findByUserId(userId).stream()
+                    .filter(r -> "ARCHIVED".equals(r.getStatus().name()))
+                    .toList();
+        } else if ("all".equals(statusFilter)) {
+            activeRoadmaps = roadmapRepository.findByUserId(userId);
+        } else {
+            activeRoadmaps = roadmapRepository.findActiveByUserId(userId);
+        }
         List<CharacterListDto> result = new ArrayList<>();
 
         for (Roadmap roadmap : activeRoadmaps) {
@@ -130,6 +143,7 @@ public class RoadmapQueryService {
                     roadmap.getJobCode(),
                     job != null ? job.jobName() : roadmap.getJobCode(),
                     job != null ? job.tagline() : null,
+                    roadmap.getStatus().name(),
                     snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO,
                     snapshot != null ? snapshot.stage() : stagePolicy.initialStage(),
                     currentLevel,
@@ -137,6 +151,15 @@ public class RoadmapQueryService {
             ));
         }
         return result;
+    }
+
+    /**
+     * roadmapId → axisCode → axisName 매핑을 반환한다.
+     */
+    public Map<String, String> getAxisNameMap(Long roadmapId) {
+        Roadmap roadmap = roadmapRepository.findById(roadmapId).orElse(null);
+        if (roadmap == null) return Collections.emptyMap();
+        return buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
     }
 
     private Map<String, String> buildAxisNameMap(String jobCode, int version) {
@@ -182,8 +205,8 @@ public class RoadmapQueryService {
 
     public record CharacterListDto(Long characterId, Long roadmapId, String species, String nickname,
                                    String jobCode, String jobName, String tagline,
-                                   BigDecimal completionRate, String stage, int level,
-                                   NextQuestDto nextQuest) {}
+                                   String roadmapStatus, BigDecimal completionRate, String stage,
+                                   int level, NextQuestDto nextQuest) {}
     public record NextQuestDto(Long questId, String title) {}
 
     public static class RoadmapNotFoundException extends RuntimeException {

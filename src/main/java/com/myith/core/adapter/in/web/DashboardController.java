@@ -2,6 +2,7 @@ package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.dashboard.DashboardQueryService;
 import com.myith.core.application.export.ExportService;
+import com.myith.core.application.roadmap.RoadmapQueryService;
 import com.myith.core.common.ApiResponse;
 import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "Dashboard", description = "대시보드·경험카드·내보내기")
 @RestController
@@ -24,10 +26,14 @@ public class DashboardController {
 
     private final DashboardQueryService dashboardQueryService;
     private final ExportService exportService;
+    private final RoadmapQueryService roadmapQueryService;
 
-    public DashboardController(DashboardQueryService dashboardQueryService, ExportService exportService) {
+    public DashboardController(DashboardQueryService dashboardQueryService,
+                               ExportService exportService,
+                               RoadmapQueryService roadmapQueryService) {
         this.dashboardQueryService = dashboardQueryService;
         this.exportService = exportService;
+        this.roadmapQueryService = roadmapQueryService;
     }
 
     // ────────────────── GET /api/roadmaps/{roadmapId}/dashboard ──────────────────
@@ -105,27 +111,56 @@ public class DashboardController {
     public ResponseEntity<ApiResponse<DashboardResponse>> getDashboard(
             @AuthenticationPrincipal Long userId,
             @PathVariable String roadmapId) {
-        DashboardQueryService.DashboardDto dto = dashboardQueryService.getDashboard(userId, IdCodec.decode(roadmapId));
+        Long roadmapLongId = IdCodec.decode(roadmapId);
+        DashboardQueryService.DashboardDto dto = dashboardQueryService.getDashboard(userId, roadmapLongId);
+
+        // axisCode → axisName 매핑
+        Map<String, String> axisNameMap = roadmapQueryService.getAxisNameMap(roadmapLongId);
+
+        // 캐릭터 정보 조회
+        RoadmapQueryService.RoadmapDetailDto detail = roadmapQueryService.getDetail(userId, roadmapLongId);
+        int completionRate = dto.completionRate() != null ? dto.completionRate().intValue() : 0;
+        int stageNum = detail.character() != null ? detail.character().stageNumber() : 1;
+        String stageLabel = detail.character() != null ? detail.character().stageLabel() : "시작";
+        String nickname = detail.character() != null ? detail.character().nickname() : null;
+        String species = detail.character() != null ? detail.character().species() : null;
+
+        // 완료 퀘스트 수 계산
+        long completedQuestCount = dto.skillTree().stream()
+                .flatMap(st -> st.quests().stream())
+                .filter(q -> "DONE".equals(q.status()) || "ALREADY_KNOWN".equals(q.status()))
+                .count();
+
+        // 현재 레벨 계산 (OPEN 또는 DONE 상태의 퀘스트 중 최고 레벨)
+        int currentLevel = dto.skillTree().stream()
+                .filter(st -> st.quests().stream()
+                        .anyMatch(q -> "OPEN".equals(q.status()) || "DONE".equals(q.status())))
+                .mapToInt(DashboardQueryService.SkillTreeDto::level)
+                .max().orElse(1);
+
         DashboardResponse response = new DashboardResponse(
                 new DashboardCharacterResponse(
-                        "견습 서버 개발자", "백엔드 개발자", "deokbaseu",
-                        4, "완성",
-                        dto.completionRate() != null ? dto.completionRate().intValue() : 0,
-                        7, 4
+                        nickname, detail.jobName(), species,
+                        stageNum, stageLabel,
+                        completionRate, (int) completedQuestCount, currentLevel
                 ),
                 dto.radar().stream().map(r -> new QuestController.RadarEntry(
-                        r.axisCode(), r.axisCode(),
+                        r.axisCode(), axisNameMap.getOrDefault(r.axisCode(), r.axisCode()),
                         r.percent() != null ? r.percent().intValue() : 0
                 )).toList(),
                 dto.skillTree().stream().map(st -> new SkillTreeLevelResponse(
                         st.level(),
                         st.quests().stream().map(q -> new SkillTreeQuestResponse(
-                                "qst_" + q.questId(), q.title(), "collaboration", q.axisName(), q.status()
+                                "qst_" + q.questId(), q.title(),
+                                q.axisCode(),
+                                axisNameMap.getOrDefault(q.axisCode(), q.axisCode()),
+                                q.status()
                         )).toList()
                 )).toList(),
                 dto.experienceCards().stream().map(ec -> new StarController.ExperienceCardResponse(
-                        "exp_01", "qst_01", ec.questTitle(),
-                        "programming", ec.axisName(), ec.ncsUnitName(),
+                        "exp_" + ec.questId(), "qst_" + ec.questId(), ec.questTitle(),
+                        ec.axisCode(), axisNameMap.getOrDefault(ec.axisCode(), ec.axisCode()),
+                        ec.ncsUnitName(),
                         new QuestController.StarResponse(ec.situation(), ec.task(), ec.action(), ec.result()),
                         null
                 )).toList(),

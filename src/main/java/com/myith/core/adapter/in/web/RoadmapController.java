@@ -1,6 +1,7 @@
 package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.quest.QuestManageService;
+import com.myith.core.application.roadmap.JobQueryService;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.application.roadmap.RoadmapCreateService.CreateCommand;
 import com.myith.core.application.roadmap.RoadmapCreateService.CreateResult;
@@ -39,13 +40,16 @@ public class RoadmapController {
     private final RoadmapCreateService roadmapCreateService;
     private final RoadmapQueryService roadmapQueryService;
     private final QuestManageService questManageService;
+    private final JobQueryService jobQueryService;
 
     public RoadmapController(RoadmapCreateService roadmapCreateService,
                              RoadmapQueryService roadmapQueryService,
-                             QuestManageService questManageService) {
+                             QuestManageService questManageService,
+                             JobQueryService jobQueryService) {
         this.roadmapCreateService = roadmapCreateService;
         this.roadmapQueryService = roadmapQueryService;
         this.questManageService = questManageService;
+        this.jobQueryService = jobQueryService;
     }
 
     // ────────────────── POST /api/roadmaps ──────────────────
@@ -267,12 +271,14 @@ public class RoadmapController {
             @AuthenticationPrincipal Long userId,
             @PathVariable String roadmapId,
             @Valid @RequestBody AddQuestRequest request) {
-        Quest quest = questManageService.addCustomQuest(userId, IdCodec.decode(roadmapId),
+        Long roadmapLongId = IdCodec.decode(roadmapId);
+        Quest quest = questManageService.addCustomQuest(userId, roadmapLongId,
                 request.title(), request.axisCode(), request.level());
+        String axisName = resolveAxisName(roadmapLongId, quest.getAxisCode());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of(new AddQuestResponse(
                         "qst_" + quest.getId(), quest.getTitle(),
-                        quest.getAxisCode(), quest.getAxisCode(),
+                        quest.getAxisCode(), axisName,
                         quest.getLevel(), "OPEN", "CUSTOM",
                         quest.getOrderInLevel(), quest.getVersion()
                 )));
@@ -384,6 +390,10 @@ public class RoadmapController {
             @PathVariable String questId) {
         questManageService.deleteQuest(userId, IdCodec.decode(roadmapId), IdCodec.decode(questId));
         return ResponseEntity.noContent().build();
+    }
+
+    private String resolveAxisName(Long roadmapId, String axisCode) {
+        return roadmapQueryService.getAxisNameMap(roadmapId).getOrDefault(axisCode, axisCode);
     }
 
     // ────────────────── Request / Response DTOs ──────────────────

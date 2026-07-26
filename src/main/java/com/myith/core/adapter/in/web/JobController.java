@@ -173,7 +173,7 @@ public class JobController {
         DiagnosisResponse response = new DiagnosisResponse(
                 jobCode, dto.profileVersion(),
                 dto.questions().stream().map(q -> new QuestionResponse(
-                        q.skillCode(), q.text(), q.axisCode(), q.axisCode(), 0
+                        q.skillCode(), q.text(), q.axisCode(), q.axisName(), q.sortOrder()
                 )).toList(),
                 List.of(
                         new DiagnosisLevelResponse("unknown", "모름", BigDecimal.ZERO),

@@ -73,21 +73,34 @@ public class CharacterController {
             @Parameter(description = "active | archived | all (기본 active)", example = "active",
                     schema = @Schema(allowableValues = {"active", "archived", "all"}, defaultValue = "active"))
             @RequestParam(defaultValue = "active") String status) {
-        List<RoadmapQueryService.CharacterListDto> characters = roadmapQueryService.getCharacters(userId);
-        List<CharacterResponse> response = characters.stream().map(c -> new CharacterResponse(
+        List<RoadmapQueryService.CharacterListDto> characters = roadmapQueryService.getCharacters(userId, status);
+        List<CharacterResponse> response = characters.stream().map(c -> {
+            int rate = c.completionRate() != null ? c.completionRate().intValue() : 0;
+            // 스냅샷의 stage를 우선 사용하고, 없으면 completionRate 기반 계산
+            int stageNum = c.stage() != null ? stageToNumber(c.stage()) : stageFromRate(rate);
+            String stageLabel = c.stage() != null ? c.stage() : stageLabelFromRate(rate);
+            return new CharacterResponse(
                 "chr_" + c.characterId(),
                 "rmp_" + c.roadmapId(),
                 c.species(), c.nickname(),
                 c.jobCode(), c.jobName(), c.tagline(),
-                "ACTIVE",
-                c.completionRate() != null ? c.completionRate().intValue() : 0,
-                stageFromRate(c.completionRate() != null ? c.completionRate().intValue() : 0),
-                stageLabelFromRate(c.completionRate() != null ? c.completionRate().intValue() : 0),
+                c.roadmapStatus(),
+                rate, stageNum, stageLabel,
                 c.level(),
                 c.nextQuest() != null ? new NextQuestResponse("qst_" + c.nextQuest().questId(), c.nextQuest().title()) : null,
                 null, null
-        )).toList();
+            );
+        }).toList();
         return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    private int stageToNumber(String stage) {
+        return switch (stage) {
+            case "완성" -> 4;
+            case "숙련" -> 3;
+            case "성장" -> 2;
+            default -> 1;
+        };
     }
 
     private int stageFromRate(int rate) {

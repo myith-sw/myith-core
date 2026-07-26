@@ -67,7 +67,7 @@ public class DashboardQueryService {
             if (!q.getStatus().isCompleted()) continue;
             starRecordRepository.findByQuestId(q.getId()).ifPresent(star ->
                     experienceCards.add(new ExperienceCardDto(
-                            q.getTitle(), q.getAxisCode(), q.getNcsUnitCode(),
+                            q.getId(), q.getTitle(), q.getAxisCode(), q.getNcsUnitCode(),
                             star.getSituation(), star.getTask(), star.getAction(), star.getResult()
                     )));
         }
@@ -90,7 +90,7 @@ public class DashboardQueryService {
                                List<ExperienceCardDto> experienceCards) {}
     public record RadarDto(String axisCode, BigDecimal percent) {}
     public record SkillTreeDto(int level, List<SkillTreeQuestDto> quests) {}
-    public record SkillTreeQuestDto(Long questId, String title, String axisName, String status) {}
-    public record ExperienceCardDto(String questTitle, String axisName, String ncsUnitName,
+    public record SkillTreeQuestDto(Long questId, String title, String axisCode, String status) {}
+    public record ExperienceCardDto(Long questId, String questTitle, String axisCode, String ncsUnitName,
                                     String situation, String task, String action, String result) {}
 }

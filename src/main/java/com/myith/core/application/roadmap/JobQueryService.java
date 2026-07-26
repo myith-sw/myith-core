@@ -70,7 +70,28 @@ public class JobQueryService {
                 .orElseThrow(() -> new JobProfileNotFoundException(jobCode));
 
         List<QuestionDto> questions = parseQuestions(profile.questions());
-        return new DiagnosisDto(profile.version(), questions);
+
+        // axisCode → axisName 매핑 구축
+        Map<String, String> axisNameMap = buildAxisNameMap(profile.axes());
+        List<QuestionDto> enriched = new java.util.ArrayList<>();
+        for (int i = 0; i < questions.size(); i++) {
+            QuestionDto q = questions.get(i);
+            String axisName = axisNameMap.getOrDefault(q.axisCode(), q.axisCode());
+            enriched.add(new QuestionDto(q.skillCode(), q.text(), q.axisCode(), axisName, i + 1));
+        }
+
+        return new DiagnosisDto(profile.version(), enriched);
+    }
+
+    private Map<String, String> buildAxisNameMap(String axesJson) {
+        try {
+            List<Map<String, String>> axes = objectMapper.readValue(axesJson, new TypeReference<>() {});
+            return axes.stream().collect(Collectors.toMap(
+                    a -> a.get("axisCode"), a -> a.get("axisName"),
+                    (a, b) -> a));
+        } catch (JsonProcessingException e) {
+            return Collections.emptyMap();
+        }
     }
 
     private void publishJobProfileBuildIfNeeded(String jobCode) {
@@ -128,7 +149,12 @@ public class JobQueryService {
     public record CategoryDto(String categoryCode, String categoryName, List<JobDto> jobs) {}
     public record JobDto(String jobCode, String jobName, String tagline, List<String> keywords, boolean available) {}
     public record DiagnosisDto(int profileVersion, List<QuestionDto> questions) {}
-    public record QuestionDto(String skillCode, String text, String axisCode) {}
+    public record QuestionDto(String skillCode, String text, String axisCode, String axisName, int sortOrder) {
+        /** Jackson deserialization constructor (questions JSON has only skillCode, text, axisCode) */
+        public QuestionDto(String skillCode, String text, String axisCode) {
+            this(skillCode, text, axisCode, axisCode, 0);
+        }
+    }
 
     public static class JobProfileNotFoundException extends RuntimeException {
         public JobProfileNotFoundException(String jobCode) {
