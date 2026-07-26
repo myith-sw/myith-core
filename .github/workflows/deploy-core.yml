@@ -22,7 +22,7 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: myith-core-app
-  INSTANCE_ID: i-0f8605427dbe40c17 # Core EC2
+  INSTANCE_ID: i-08b67566d4cd2665e # Core EC2
   HEALTH_URL: https://api.myith.store/api/health
 
 jobs:

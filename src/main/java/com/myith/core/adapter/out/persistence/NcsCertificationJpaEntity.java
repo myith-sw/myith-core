@@ -11,17 +11,17 @@ import java.io.Serializable;
 public class NcsCertificationJpaEntity {
 
     @Id
-    @Column(name = "ncs_unit_code", length = 50)
+    @Column(name = "ncs_unit_code", columnDefinition = "varchar")
     private String ncsUnitCode;
 
     @Id
-    @Column(name = "cert_code", length = 50)
+    @Column(name = "cert_code", columnDefinition = "varchar")
     private String certCode;
 
-    @Column(name = "cert_name", nullable = false, length = 200)
+    @Column(name = "cert_name", nullable = false, columnDefinition = "varchar")
     private String certName;
 
-    @Column(name = "unit_type", length = 50)
+    @Column(name = "unit_type", columnDefinition = "varchar")
     private String unitType;
 
     protected NcsCertificationJpaEntity() {}

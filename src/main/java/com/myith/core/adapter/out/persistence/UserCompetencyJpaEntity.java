@@ -5,6 +5,7 @@ import org.hibernate.annotations.Immutable;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Entity
 @Immutable
@@ -17,17 +18,20 @@ public class UserCompetencyJpaEntity {
     private Long roadmapId;
 
     @Id
-    @Column(name = "skill_code", length = 50)
+    @Column(name = "skill_code", columnDefinition = "varchar")
     private String skillCode;
 
-    @Column(precision = 5, scale = 2)
+    @Column(nullable = false, precision = 3, scale = 2)
     private BigDecimal mastery;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String evidence;
 
-    @Column(precision = 5, scale = 2)
+    @Column(nullable = false, precision = 3, scale = 2)
     private BigDecimal confidence;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
 
     protected UserCompetencyJpaEntity() {}
 
@@ -36,6 +40,7 @@ public class UserCompetencyJpaEntity {
     public BigDecimal getMastery() { return mastery; }
     public String getEvidence() { return evidence; }
     public BigDecimal getConfidence() { return confidence; }
+    public Instant getCreatedAt() { return createdAt; }
 
     public static class UserCompetencyId implements Serializable {
         private Long roadmapId;

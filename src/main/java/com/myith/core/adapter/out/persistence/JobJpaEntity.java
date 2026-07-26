@@ -8,20 +8,23 @@ import jakarta.persistence.*;
 public class JobJpaEntity {
 
     @Id
-    @Column(name = "job_code", length = 50)
+    @Column(name = "job_code", columnDefinition = "varchar")
     private String jobCode;
 
-    @Column(name = "job_name", nullable = false, length = 100)
+    @Column(name = "job_name", nullable = false, columnDefinition = "varchar")
     private String jobName;
 
-    @Column(name = "category_code", nullable = false, length = 50)
+    @Column(name = "category_code", columnDefinition = "varchar")
     private String categoryCode;
 
-    @Column(name = "category_name", nullable = false, length = 100)
+    @Column(name = "category_name", columnDefinition = "varchar")
     private String categoryName;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "text")
     private String tagline;
+
+    @Column(name = "ncs_detail_code", columnDefinition = "varchar")
+    private String ncsDetailCode;
 
     protected JobJpaEntity() {}
 
@@ -30,4 +33,5 @@ public class JobJpaEntity {
     public String getCategoryCode() { return categoryCode; }
     public String getCategoryName() { return categoryName; }
     public String getTagline() { return tagline; }
+    public String getNcsDetailCode() { return ncsDetailCode; }
 }
