@@ -438,6 +438,26 @@ POST /api/demo/nudge   Header: X-Demo-Token
   - `fileKey`: S3 파일 키 (nullable) — 여러 개일 수 있으므로 각각 가져와 파싱
 - `narrative`와 `experiences` 모두 null이면 선택형 경로(즉시 조립), 하나라도 있으면 비동기 경로.
 
+### CompetencyExtracted payload (확정, 2026-07-26)
+
+```json
+{
+  "userId": 42,
+  "roadmapId": 1007,
+  "competencies": [
+    { "skillCode": "git", "mastery": 0.66, "confidence": 0.85, "evidence": "GitHub Actions로 CI 파이프라인을 구성하고 브랜치 전략을 PR 기반으로 운영" }
+  ]
+}
+```
+
+- 원소 4필드 고정: `skillCode`, `mastery`, `confidence`, `evidence`. 추가 필드 없음.
+- **근거 있는 스킬만** 포함. evidence null인 스킬은 배열에 들어오지 않는다.
+- `mastery`, `confidence` 범위: 0.00~1.00.
+- **부분 업서트(upsert)** 시맨틱: 배열에 없는 skill_code는 "변경 없음". 삭제 아님.
+- **빈 배열** `competencies: []` = "추출 완료, 근거 0건, 자가진단만으로 조립하라" 신호. 에러 아님.
+- 봉투 `version`: 현재 1 고정, 스키마 진화 시 올림. Core는 미지 필드 무시(전방 호환).
+- 진실의 원천은 `user_competency` 테이블. 이벤트는 즉시 조립 트리거 + 편의 미러.
+
 ## CQRS 스냅샷
 
 트리거: 퀘스트 완료 토글, 퀘스트 추가·삭제, 로드맵 조립 완료. 멱등하게 설계.
