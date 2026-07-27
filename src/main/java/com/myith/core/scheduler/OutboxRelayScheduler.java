@@ -10,8 +10,6 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 
 /**
@@ -39,7 +37,6 @@ public class OutboxRelayScheduler {
     }
 
     @Scheduled(fixedDelayString = "${policy.outbox.relay-interval-ms:1000}")
-    @Transactional
     public void relay() {
         List<OutboxEvent> pending = outboxRepository.findPending();
         for (OutboxEvent event : pending) {
@@ -57,7 +54,7 @@ public class OutboxRelayScheduler {
                 log.info("Outbox relayed: eventId={}, type={}", event.eventId(), event.eventType());
             } catch (Exception e) {
                 outboxRepository.incrementRetry(event.id());
-                if (event.retryCount() + 1 > maxRetries) {
+                if (event.retryCount() + 1 >= maxRetries) {
                     outboxRepository.markFailed(event.id());
                 }
                 log.error("Outbox relay failed: eventId={}, retries={}", event.eventId(), event.retryCount() + 1, e);

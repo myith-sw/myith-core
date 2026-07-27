@@ -59,6 +59,7 @@ public class RoadmapJpaEntity {
         entity.createdAt = roadmap.getCreatedAt();
         entity.updatedAt = roadmap.getUpdatedAt();
         entity.archivedAt = roadmap.getArchivedAt();
+        entity.deletedAt = roadmap.getDeletedAt();
         return entity;
     }
 
@@ -67,7 +68,7 @@ public class RoadmapJpaEntity {
                 id, userId, jobCode, profileVersion,
                 RoadmapStatus.valueOf(status),
                 GenerationState.valueOf(generationState),
-                retryCount, createdAt, updatedAt, archivedAt
+                retryCount, createdAt, updatedAt, archivedAt, deletedAt
         );
     }
 }

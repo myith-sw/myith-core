@@ -135,11 +135,12 @@ public class RoadmapAssembler {
             }
 
             if (!levelUnlocked || !prereqSatisfied) {
-                Quest locked = Quest.createSkillQuest(
-                        q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
+                Quest locked = Quest.restore(
+                        q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                         q.getLevel(), q.getOrderInLevel(), q.getTitle(),
                         q.getCompletionCriteria(), q.getNcsUnitCode(),
-                        QuestStatus.LOCKED
+                        q.getSource(), QuestStatus.LOCKED, q.getCompletedAt(),
+                        q.getVersion(), q.getCreatedAt(), q.getUpdatedAt()
                 );
                 quests.set(i, locked);
             }

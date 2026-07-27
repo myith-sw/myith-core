@@ -14,6 +14,7 @@ public class Roadmap {
     private Instant createdAt;
     private Instant updatedAt;
     private Instant archivedAt;
+    private Instant deletedAt;
 
     private Roadmap() {}
 
@@ -33,7 +34,7 @@ public class Roadmap {
     public static Roadmap restore(Long id, Long userId, String jobCode, int profileVersion,
                                   RoadmapStatus status, GenerationState generationState,
                                   int retryCount, Instant createdAt, Instant updatedAt,
-                                  Instant archivedAt) {
+                                  Instant archivedAt, Instant deletedAt) {
         Roadmap r = new Roadmap();
         r.id = id;
         r.userId = userId;
@@ -45,6 +46,7 @@ public class Roadmap {
         r.createdAt = createdAt;
         r.updatedAt = updatedAt;
         r.archivedAt = archivedAt;
+        r.deletedAt = deletedAt;
         return r;
     }
 
@@ -84,6 +86,7 @@ public class Roadmap {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getArchivedAt() { return archivedAt; }
+    public Instant getDeletedAt() { return deletedAt; }
 
     public void setId(Long id) { this.id = id; }
 }
