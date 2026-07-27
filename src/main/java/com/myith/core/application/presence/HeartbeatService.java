@@ -68,8 +68,10 @@ public class HeartbeatService {
             return new HeartbeatResult(true, "ABSENCE_48H", absence48hMessage, charState);
         }
 
-        // nudge 여부
-        boolean nudge = user.getLastNudgeSentAt() != null;
+        // nudge 여부: lastNudgeSentAt > lastHeartbeatAt이면 아직 미확인 넛지
+        boolean nudge = user.getLastNudgeSentAt() != null
+                && (user.getLastHeartbeatAt() == null
+                    || user.getLastNudgeSentAt().isAfter(user.getLastHeartbeatAt()));
         if (nudge) {
             return new HeartbeatResult(true, "ABSENCE_48H", absence48hMessage, charState);
         }

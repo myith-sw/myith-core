@@ -62,12 +62,22 @@ public class HeartbeatController {
                 result.characterState() != null
                         ? new CharacterStateResponse(
                         result.characterState().species(),
-                        4,
+                        stageToNumber(result.characterState().stage()),
                         result.characterState().completionRate() != null
                                 ? result.characterState().completionRate().intValue() : 0)
                         : null
         );
         return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    private static int stageToNumber(String stage) {
+        if (stage == null) return 1;
+        return switch (stage) {
+            case "완성" -> 4;
+            case "숙련" -> 3;
+            case "성장" -> 2;
+            default -> 1;
+        };
     }
 
     @Schema(name = "HeartbeatResponse")
