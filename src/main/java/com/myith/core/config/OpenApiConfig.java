@@ -56,8 +56,15 @@ import java.util.concurrent.ConcurrentHashMap;
                         - `requestId`: 로그 추적용 요청 ID
 
                         ## ID 체계
-                        모든 리소스 ID는 접두사가 붙은 문자열입니다. (예: `rdm_01J3ABC`, `qst_01J3DEF`, `chr_01J3GHI`)
-                        숫자 타입이 아님에 유의하세요.
+                        모든 리소스 ID는 접두사가 붙은 문자열입니다. 숫자 타입이 아님에 유의하세요.
+                        | 접두사 | 리소스 | 예시 |
+                        |--------|--------|------|
+                        | `rmp_` | 로드맵 | `rmp_01J3ABC` |
+                        | `qst_` | 퀘스트 | `qst_05` |
+                        | `chr_` | 캐릭터 | `chr_01J3GHI` |
+                        | `usr_` | 사용자 | `usr_01J3ABC` |
+                        | `exp_` | 경험카드 | `exp_01` |
+                        | `aie_` | AI보완요청 | `aie_550e8400-...` (UUID) |
                         """
         ),
         servers = {
