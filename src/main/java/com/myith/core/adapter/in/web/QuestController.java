@@ -280,7 +280,8 @@ public class QuestController {
                     STAR 원문을 AI에 전달해 보완 제안·항목별 피드백·자기소개서 초안을 받습니다.
                     서버는 원문을 직접 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /star로 저장하세요.
                     202 수신 후 GET /api/ai-enhancements/{requestId}를 1~2초 간격으로 폴링하여 결과를 확인하세요.
-                    PROCESSING 상태가 지속되면 최대 30초 후 타임아웃 처리를 권장합니다."""
+                    서버가 60초 경과 시 FAILED(errorCode: AI_TIMEOUT)를 반환합니다.
+                    클라이언트는 별도 타임아웃 없이 COMPLETED 또는 FAILED가 올 때까지 폴링하세요."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "비동기 접수",

@@ -6,6 +6,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public interface OutboxJpaRepository extends JpaRepository<OutboxJpaEntity, Long> {
     List<OutboxJpaEntity> findByStatusOrderByCreatedAtAsc(String status);
@@ -15,4 +17,7 @@ public interface OutboxJpaRepository extends JpaRepository<OutboxJpaEntity, Long
             @Param("aggregateId") String aggregateId,
             @Param("eventType") String eventType,
             @Param("since") Instant since);
+
+    @Query("SELECT o.createdAt FROM OutboxJpaEntity o WHERE o.eventId = :eventId")
+    Optional<Instant> findCreatedAtByEventId(@Param("eventId") UUID eventId);
 }

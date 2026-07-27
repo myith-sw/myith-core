@@ -93,6 +93,7 @@ policy:
     max-experiences: ${ROADMAP_MAX_EXPERIENCES:3}
   ai-enhancement:
     result-ttl-minutes: ${AI_ENHANCEMENT_TTL:30}
+    timeout-seconds: ${AI_ENHANCEMENT_TIMEOUT:60}
   collect:
     cron: ${COLLECT_CRON:0 0 4 * * MON}
     enabled: ${COLLECT_ENABLED:true}

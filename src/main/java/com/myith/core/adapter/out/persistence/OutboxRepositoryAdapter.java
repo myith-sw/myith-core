@@ -61,4 +61,9 @@ public class OutboxRepositoryAdapter implements OutboxRepository {
     public boolean existsRecentEvent(String aggregateId, String eventType, Instant since) {
         return jpaRepository.existsByAggregateIdAndEventTypeAndCreatedAtAfter(aggregateId, eventType, since);
     }
+
+    @Override
+    public java.util.Optional<Instant> findCreatedAtByEventId(java.util.UUID eventId) {
+        return jpaRepository.findCreatedAtByEventId(eventId);
+    }
 }
