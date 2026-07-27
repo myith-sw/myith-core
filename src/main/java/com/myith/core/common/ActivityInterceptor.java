@@ -17,7 +17,7 @@ import java.util.Set;
 public class ActivityInterceptor implements HandlerInterceptor {
 
     private static final Set<String> EXCLUDED_PATHS = Set.of(
-            "/api/heartbeat", "/health", "/api-docs", "/swagger-ui"
+            "/api/heartbeat", "/api/health", "/api-docs", "/swagger-ui"
     );
 
     private final UserRepository userRepository;

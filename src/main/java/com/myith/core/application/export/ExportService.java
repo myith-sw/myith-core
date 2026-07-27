@@ -1,5 +1,8 @@
 package com.myith.core.application.export;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myith.core.application.port.*;
 import com.myith.core.application.port.JobReadRepository.JobData;
 import com.myith.core.application.roadmap.RoadmapQueryService;
@@ -23,6 +26,8 @@ public class ExportService {
     private final StarRecordRepository starRecordRepository;
     private final DashboardSnapshotRepository snapshotRepository;
     private final JobReadRepository jobRepository;
+    private final JobProfileReadRepository jobProfileRepository;
+    private final ObjectMapper objectMapper;
     private final GrowthStagePolicy stagePolicy;
     private final Map<String, ExportRenderer> renderers;
 
@@ -32,6 +37,8 @@ public class ExportService {
                          StarRecordRepository starRecordRepository,
                          DashboardSnapshotRepository snapshotRepository,
                          JobReadRepository jobRepository,
+                         JobProfileReadRepository jobProfileRepository,
+                         ObjectMapper objectMapper,
                          GrowthStagePolicy stagePolicy,
                          List<ExportRenderer> rendererList) {
         this.roadmapRepository = roadmapRepository;
@@ -40,6 +47,8 @@ public class ExportService {
         this.starRecordRepository = starRecordRepository;
         this.snapshotRepository = snapshotRepository;
         this.jobRepository = jobRepository;
+        this.jobProfileRepository = jobProfileRepository;
+        this.objectMapper = objectMapper;
         this.stagePolicy = stagePolicy;
         this.renderers = rendererList.stream()
                 .collect(Collectors.toMap(ExportRenderer::fileExtension, r -> r));
@@ -64,6 +73,9 @@ public class ExportService {
 
         List<Quest> quests = questRepository.findByRoadmapId(roadmapId);
 
+        // axisCode → axisName 매핑
+        Map<String, String> axisNameMap = buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
+
         // 레벨별 그룹핑 + STAR 조인
         Map<Integer, List<ExportData.QuestExport>> byLevel = new LinkedHashMap<>();
         quests.stream()
@@ -72,8 +84,9 @@ public class ExportService {
                     ExportData.StarExport star = starRecordRepository.findByQuestId(q.getId())
                             .map(s -> new ExportData.StarExport(s.getSituation(), s.getTask(), s.getAction(), s.getResult()))
                             .orElse(null);
+                    String axisName = axisNameMap.getOrDefault(q.getAxisCode(), q.getAxisCode());
                     byLevel.computeIfAbsent(q.getLevel(), k -> new ArrayList<>())
-                            .add(new ExportData.QuestExport(q.getTitle(), q.getAxisCode(), q.getStatus().name(), star));
+                            .add(new ExportData.QuestExport(q.getTitle(), axisName, q.getStatus().name(), star));
                 });
 
         List<ExportData.LevelExport> levels = byLevel.entrySet().stream()
@@ -91,6 +104,20 @@ public class ExportService {
         byte[] content = renderer.render(data);
         String fileName = "roadmap_" + roadmapId + "." + renderer.fileExtension();
         return new ExportResult(content, renderer.contentType(), fileName);
+    }
+
+    private Map<String, String> buildAxisNameMap(String jobCode, int version) {
+        return jobProfileRepository.findByJobCodeAndVersion(jobCode, version)
+                .map(p -> {
+                    try {
+                        List<Map<String, String>> axes = objectMapper.readValue(
+                                p.axes(), new TypeReference<>() {});
+                        return axes.stream().collect(Collectors.toMap(
+                                a -> a.get("axisCode"), a -> a.get("axisName")));
+                    } catch (JsonProcessingException e) {
+                        return Collections.<String, String>emptyMap();
+                    }
+                }).orElse(Collections.emptyMap());
     }
 
     public record ExportResult(byte[] content, String contentType, String fileName) {}

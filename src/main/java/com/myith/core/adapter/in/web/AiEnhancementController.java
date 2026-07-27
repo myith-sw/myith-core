@@ -220,8 +220,8 @@ public class AiEnhancementController {
                             enhancedStar, feedback, resumeDraft, null, createdAt)));
         } catch (Exception e) {
             return ResponseEntity.ok(ApiResponse.of(
-                    new AiEnhancementResultResponse(requestId, null, "PROCESSING",
-                            null, null, null, null, null)));
+                    new AiEnhancementResultResponse(requestId, null, "FAILED",
+                            null, null, null, "INTERNAL_ERROR", null)));
         }
     }
 

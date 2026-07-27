@@ -27,7 +27,10 @@ public class SseRegistry {
         emitter.onCompletion(() -> emitters.remove(roadmapId));
         emitter.onTimeout(() -> emitters.remove(roadmapId));
         emitter.onError(e -> emitters.remove(roadmapId));
-        emitters.put(roadmapId, emitter);
+        SseEmitter old = emitters.put(roadmapId, emitter);
+        if (old != null) {
+            try { old.complete(); } catch (Exception ignored) {}
+        }
         return emitter;
     }
 

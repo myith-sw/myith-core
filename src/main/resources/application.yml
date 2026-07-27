@@ -103,7 +103,7 @@ policy:
     timeout-seconds: ${ANALYSIS_TIMEOUT:120}
   upload:
     max-size-bytes: ${UPLOAD_MAX_SIZE:10485760}
-    allowed-extensions: pdf,zip,tar.gz
+    allowed-extensions: pdf,zip,tar.gz,png,jpg,jpeg
 
 myith:
   nudge:

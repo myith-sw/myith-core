@@ -116,7 +116,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RoadmapCreateService.DuplicateSpeciesException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateSpecies(RoadmapCreateService.DuplicateSpeciesException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of("VERSION_CONFLICT", e.getMessage(), requestId()));
+                .body(ErrorResponse.of("DUPLICATE_SPECIES", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(ExportService.UnsupportedFormatException.class)
@@ -135,6 +135,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleJobProfileNotFound(JobQueryService.JobProfileNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("JOB_PROFILE_NOT_READY", "해당 직무의 프로필이 아직 준비되지 않았습니다.", requestId()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("INVALID_REQUEST", e.getMessage(), requestId()));
     }
 
     @ExceptionHandler(Exception.class)
