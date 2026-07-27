@@ -140,15 +140,17 @@ public class QuestController {
     public ResponseEntity<ApiResponse<SaveStarResponse>> saveStar(
             @AuthenticationPrincipal Long userId,
             @PathVariable String questId,
-            @RequestBody SaveStarRequest request) {
+            @Valid @RequestBody SaveStarRequest request) {
         questDetailService.saveStar(userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
         StarInput s = request.star();
+        // Read actual quest status after save
+        QuestDetailService.QuestDetailDto detail = questDetailService.getDetail(userId, IdCodec.decode(questId));
         return ResponseEntity.ok(ApiResponse.of(new SaveStarResponse(
                 questId, new StarResponse(s.situation(), s.task(), s.action(), s.result()),
                 request.source() != null ? request.source() : "manual",
-                "PENDING", null
+                detail.status(), detail.updatedAt()
         )));
     }
 
@@ -454,7 +456,7 @@ public class QuestController {
 
     @Schema(name = "AiEnhancementRequest")
     record AiEnhancementRequest(
-            @Schema(description = "AI 보완을 요청할 STAR 원문입니다. 각 필드 최대 2000자") StarInput star,
+            @Valid @Schema(description = "AI 보완을 요청할 STAR 원문입니다. 각 필드 최대 2000자") StarInput star,
             @Schema(description = "결과물 언어 로케일입니다", example = "ko-KR") String locale,
             @Schema(description = "자기소개서 초안 문체 스타일입니다", example = "concise-professional") String style
     ) {}

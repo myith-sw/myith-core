@@ -185,7 +185,7 @@ public class QuestManageService {
 
             Quest changed = Quest.restore(q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                     q.getLevel(), q.getOrderInLevel(), q.getTitle(), q.getCompletionCriteria(),
-                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), null,
+                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), q.getCompletedAt(),
                     q.getVersion(), q.getCreatedAt(), Instant.now());
             questRepository.save(changed);
         }

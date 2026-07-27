@@ -48,6 +48,7 @@ public class QuestJpaEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Version
     @Column(name = "version", nullable = false)
     private long version;
 

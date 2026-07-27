@@ -112,6 +112,10 @@ public class QuestDetailService {
                 .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
         RoadmapQueryService.validateOwnership(roadmap, userId);
 
+        if (quest.getStatus() == QuestStatus.LOCKED) {
+            throw new QuestManageService.QuestLockedException(questId);
+        }
+
         // 낙관적 락 검증
         if (quest.getVersion() != version) {
             throw new QuestManageService.OptimisticLockConflictException(
@@ -235,7 +239,7 @@ public class QuestDetailService {
 
             Quest changed = Quest.restore(q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                     q.getLevel(), q.getOrderInLevel(), q.getTitle(), q.getCompletionCriteria(),
-                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), null,
+                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), q.getCompletedAt(),
                     q.getVersion(), q.getCreatedAt(), Instant.now());
             questRepository.save(changed);
         }
@@ -313,6 +317,10 @@ public class QuestDetailService {
                 .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
         RoadmapQueryService.validateOwnership(roadmap, userId);
 
+        if (quest.getStatus() == QuestStatus.LOCKED) {
+            throw new QuestManageService.QuestLockedException(questId);
+        }
+
         StarRecord existing = starRecordRepository.findByQuestId(questId).orElse(null);
         if (existing != null) {
             existing.update(situation, task, action, result);
@@ -320,6 +328,29 @@ public class QuestDetailService {
         } else {
             StarRecord record = StarRecord.create(questId, userId, situation, task, action, result);
             starRecordRepository.save(record);
+        }
+
+        // D-15: OPEN→PENDING when STAR has content, PENDING→OPEN when all empty
+        boolean hasContent = (situation != null && !situation.isBlank())
+                || (task != null && !task.isBlank())
+                || (action != null && !action.isBlank())
+                || (result != null && !result.isBlank());
+
+        QuestStatus currentStatus = quest.getStatus();
+        QuestStatus newStatus = currentStatus;
+        if (currentStatus == QuestStatus.OPEN && hasContent) {
+            newStatus = QuestStatus.PENDING;
+        } else if (currentStatus == QuestStatus.PENDING && !hasContent) {
+            newStatus = QuestStatus.OPEN;
+        }
+
+        if (newStatus != currentStatus) {
+            Quest updated = Quest.restore(quest.getId(), quest.getRoadmapId(), quest.getSkillCode(),
+                    quest.getAxisCode(), quest.getLevel(), quest.getOrderInLevel(), quest.getTitle(),
+                    quest.getCompletionCriteria(), quest.getNcsUnitCode(), quest.getSource(),
+                    newStatus, quest.getCompletedAt(), quest.getVersion(),
+                    quest.getCreatedAt(), Instant.now());
+            questRepository.save(updated);
         }
     }
 
@@ -334,6 +365,10 @@ public class QuestDetailService {
         Roadmap roadmap = roadmapRepository.findById(quest.getRoadmapId())
                 .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
         RoadmapQueryService.validateOwnership(roadmap, userId);
+
+        if (quest.getStatus() == QuestStatus.LOCKED) {
+            throw new QuestManageService.QuestLockedException(questId);
+        }
 
         UUID eventId = UUID.randomUUID();
         Map<String, Object> payload = new LinkedHashMap<>();
