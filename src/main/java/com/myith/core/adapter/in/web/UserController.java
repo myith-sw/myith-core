@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -80,7 +81,7 @@ public class UserController {
     @PatchMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> updateMe(
             @AuthenticationPrincipal Long userId,
-            @RequestBody UpdateMeRequest request) {
+            @Valid @RequestBody UpdateMeRequest request) {
         User user = userService.updateMe(userId, request.nickname(), request.profileImageUrl());
         return ResponseEntity.ok(ApiResponse.of(UserResponse.from(user)));
     }

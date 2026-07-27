@@ -76,8 +76,13 @@ public class StarController {
             @RequestParam(defaultValue = "all") String completeness,
             @Parameter(description = "star_record.tags 배열 필터", example = "리더십")
             @RequestParam(required = false) String tag) {
+        String normalizedCompleteness = switch (completeness) {
+            case "complete" -> "COMPLETE";
+            case "partial" -> "PARTIAL";
+            default -> null;  // "all" or unknown -> no filter
+        };
         StarQueryService.CursorResult result = starQueryService.getRecords(
-                userId, cursor != null ? Long.parseLong(cursor) : null, size, completeness);
+                userId, cursor != null ? Long.parseLong(cursor) : null, size, normalizedCompleteness);
         List<ExperienceCardResponse> records = result.records().stream().map(r ->
                 new ExperienceCardResponse(
                         "exp_" + r.id(), "qst_" + r.questId(), null,
