@@ -71,7 +71,7 @@ public class StarController {
             @RequestParam(defaultValue = "20") int size,
             @Parameter(description = "축 코드로 필터. 생략 시 전체", example = "programming")
             @RequestParam(required = false) String axis,
-            @Parameter(description = "완성도 필터. all | complete | partial (기본 all). complete = STAR 4칸 모두 채워짐",
+            @Parameter(description = "완성도 필터입니다. all=전체(기본값), complete=STAR 4칸(situation·task·action·result) 모두 채워진 카드만, partial=일부만 채워진 카드만 반환합니다.",
                     schema = @Schema(allowableValues = {"all", "complete", "partial"}, defaultValue = "all"))
             @RequestParam(defaultValue = "all") String completeness,
             @Parameter(description = "star_record.tags 배열 필터", example = "리더십")
@@ -98,15 +98,15 @@ public class StarController {
 
     // ── Response DTO ──
 
-    @Schema(name = "ExperienceCardResponse")
+    @Schema(name = "ExperienceCardResponse", description = "이 엔드포인트에서는 title, axisCode, axisName, ncsUnitName, createdAt이 null로 반환될 수 있습니다. 퀘스트 메타데이터가 보강된 경험 카드는 GET /api/roadmaps/{id}/dashboard 응답의 experienceCards를 사용하세요.")
     record ExperienceCardResponse(
             @Schema(description = "경험 카드 ID", example = "exp_01") String experienceId,
             @Schema(description = "퀘스트 ID입니다. 카드 클릭 시 GET /api/quests/{questId}로 퀘스트 상세 화면으로 이동하세요", example = "qst_02") String questId,
-            @Schema(description = "퀘스트 제목", example = "언어 기초로 토이앱을 만든다") String title,
-            @Schema(description = "역량 축 코드", example = "programming") String axisCode,
-            @Schema(description = "역량 축 이름", example = "프로그래밍 기초") String axisName,
-            @Schema(description = "NCS 능력단위명입니다. 퀘스트의 NCS 능력단위명을 그대로 표시하며, 없으면 null입니다", nullable = true, example = "프로그래밍언어활용") String ncsUnitName,
+            @Schema(description = "퀘스트 제목입니다. 이 엔드포인트에서는 null일 수 있습니다. 보강된 값은 대시보드 응답을 사용하세요.", nullable = true, example = "언어 기초로 토이앱을 만든다") String title,
+            @Schema(description = "역량 축 코드입니다. 이 엔드포인트에서는 null일 수 있습니다.", nullable = true, example = "programming") String axisCode,
+            @Schema(description = "역량 축 이름입니다. 이 엔드포인트에서는 null일 수 있습니다.", nullable = true, example = "프로그래밍 기초") String axisName,
+            @Schema(description = "NCS 능력단위명입니다. 퀘스트에 NCS 매핑이 없거나 이 엔드포인트에서는 null일 수 있습니다.", nullable = true, example = "프로그래밍언어활용") String ncsUnitName,
             @Schema(description = "STAR 기록입니다") QuestController.StarResponse star,
-            @Schema(description = "STAR 최초 저장일", example = "2026-07-22T05:00:00Z") String createdAt
+            @Schema(description = "STAR 최초 저장일입니다. 이 엔드포인트에서는 null일 수 있습니다.", nullable = true, example = "2026-07-22T05:00:00Z") String createdAt
     ) {}
 }

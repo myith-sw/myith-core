@@ -50,17 +50,21 @@ public class AiEnhancementController {
     @Operation(
             summary = "AI 보완 결과 조회",
             description = """
-                    화면 4-2에서 POST /api/quests/{questId}/ai-enhancements로 202를 수신한 뒤, 1~2초 간격으로 폴링하여 결과를 확인하세요.
-                    status가 PROCESSING이면 계속 폴링하고, COMPLETED 또는 FAILED이면 폴링을 종료하세요.
-                    서버가 60초 경과 시 FAILED(errorCode: AI_TIMEOUT)를 반환합니다.
-                    클라이언트는 별도 타임아웃 없이 COMPLETED 또는 FAILED가 올 때까지 폴링하세요.
-                    COMPLETED 시 각 필드 활용법은 다음과 같습니다.
+                    폴링 플로우:
+                    1. POST /api/quests/{questId}/ai-enhancements를 호출하면 202 + { requestId: "aie_..." }를 수신합니다.
+                    2. 이 엔드포인트(GET /api/ai-enhancements/{requestId})를 1~2초 간격으로 폴링합니다.
+                    3. status가 PROCESSING이면 계속 폴링합니다.
+                    4. status가 COMPLETED 또는 FAILED이면 폴링을 종료합니다.
+                    클라이언트 측 별도 타임아웃은 불필요합니다. 서버가 60초 경과 시 FAILED(errorCode: AI_TIMEOUT)를 반환합니다.
+
+                    COMPLETED 시 각 필드 활용법:
                     - enhancedStar: 비교 모달 오른쪽(AI 제안)에 표시합니다. PROCESSING이면 null입니다.
                     - feedback: 항목별 개선 힌트 목록입니다. 빈 배열이면 힌트 섹션을 숨기세요.
                     - resumeDraft: 자기소개서 초안 영역에 표시합니다.
-                    서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /star로 저장하세요.
+                    서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /api/quests/{questId}/star로 저장하세요.
+
                     FAILED 시 errorCode를 참고해 적절한 안내 문구를 표시하세요.
-                    errorCode 종류: AI_PROVIDER_TIMEOUT(Worker LLM 호출 실패), AI_TIMEOUT(서버 타임아웃 초과)."""
+                    errorCode 종류: AI_PROVIDER_TIMEOUT(Worker LLM 호출 실패), AI_TIMEOUT(서버 타임아웃 초과), INTERNAL_ERROR(내부 오류)."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
             description = "status 필드로 상태를 구분합니다. PROCESSING / COMPLETED / FAILED 세 가지입니다.",
@@ -229,7 +233,7 @@ public class AiEnhancementController {
 
     @Schema(name = "AiEnhancementResultResponse")
     record AiEnhancementResultResponse(
-            @Schema(description = "요청 ID", example = "aie_01J3ABC") String requestId,
+            @Schema(description = "요청 ID입니다. 'aie_' 접두사 + UUID 형식입니다(예: aie_550e8400-e29b-41d4-a716-446655440000). POST /api/quests/{questId}/ai-enhancements의 202 응답에서 받은 값을 그대로 사용하세요.", example = "aie_01J3ABC") String requestId,
             @Schema(description = "퀘스트 ID입니다. COMPLETED 상태일 때만 포함됩니다", nullable = true, example = "qst_05") String questId,
             @Schema(description = "처리 상태입니다. PROCESSING이면 폴링을 계속하고, COMPLETED 또는 FAILED이면 종료하세요", example = "COMPLETED",
                     allowableValues = {"PROCESSING", "COMPLETED", "FAILED"}) String status,
@@ -237,8 +241,9 @@ public class AiEnhancementController {
             @Schema(description = "화면 4-2 항목별 개선 힌트 목록입니다. COMPLETED일 때만 포함됩니다. 빈 배열이면 힌트 섹션을 숨기세요") List<FeedbackEntry> feedback,
             @Schema(description = "화면 4-2·5 자기소개서 초안 영역에 표시할 텍스트입니다. COMPLETED일 때만 포함됩니다",
                     nullable = true, example = "대용량 조회 성능 문제를 캐시 도입으로 해결한 경험이 있습니다. ...") String resumeDraft,
-            @Schema(description = "FAILED 상태일 때 오류 코드입니다. AI_PROVIDER_TIMEOUT(Worker LLM 호출 실패), AI_TIMEOUT(서버 타임아웃 초과). 해당 코드에 맞는 안내 문구를 표시하세요",
-                    nullable = true, example = "AI_PROVIDER_TIMEOUT") String errorCode,
+            @Schema(description = "FAILED 상태일 때 오류 코드입니다. 가능한 값: AI_PROVIDER_TIMEOUT(Worker의 LLM 호출이 시간 초과됨), AI_TIMEOUT(서버 측 대기 시간 초과, 기본 60초), INTERNAL_ERROR(결과 파싱 등 내부 오류). 해당 코드에 맞는 안내 문구를 표시하세요.",
+                    nullable = true, example = "AI_PROVIDER_TIMEOUT",
+                    allowableValues = {"AI_PROVIDER_TIMEOUT", "AI_TIMEOUT", "INTERNAL_ERROR"}) String errorCode,
             @Schema(description = "AI 보완 결과 생성 시각", example = "2026-07-24T03:25:00Z") String createdAt
     ) {}
 

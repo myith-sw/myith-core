@@ -179,16 +179,16 @@ public class CharacterController {
             String tagline,
             @Schema(description = "로드맵 상태입니다. ACTIVE이면 진행 중, ARCHIVED이면 완료·보관된 로드맵입니다.", example = "ACTIVE", allowableValues = {"ACTIVE", "ARCHIVED"})
             String roadmapStatus,
-            @Schema(description = "퀘스트 완료율(%)입니다. 0~100 정수입니다. 화면 1-2 진행 바, 화면 4-1 상단, 화면 5 진행률에 사용합니다.", example = "80")
+            @Schema(description = "퀘스트 완료율(%)입니다. 0~100 정수입니다. DONE + ALREADY_KNOWN 상태의 퀘스트를 전체 퀘스트 수로 나눈 비율입니다. 화면 1-2 진행 바, 화면 4-1 상단, 화면 5 진행률에 사용합니다.", example = "80")
             int completionRate,
-            @Schema(description = "성장 단계 숫자입니다(1~4). 캐릭터 이미지 파일명 {species}-{stage}.png 조합에 사용합니다. completionRate 기준: 1(0~19%), 2(20~49%), 3(50~79%), 4(80~100%).", example = "4")
+            @Schema(description = "캐릭터 성장 단계 숫자입니다(1~4). 퀘스트 난이도 레벨(level)과는 별개의 축입니다. 캐릭터 이미지 파일명 {species}-{stage}.png 조합에 사용합니다. completionRate 기준: 1=시작(0~19%), 2=성장(20~49%), 3=숙련(50~79%), 4=완성(80~100%).", example = "4")
             int stage,
-            @Schema(description = "성장 단계 한글 레이블입니다. 화면 1-2·4-1 캐릭터 옆에 표시합니다.", example = "완성",
+            @Schema(description = "성장 단계 한글 레이블입니다. stage 숫자에 대응합니다(1=시작, 2=성장, 3=숙련, 4=완성). 화면 1-2·4-1 캐릭터 옆에 표시합니다.", example = "완성",
                     allowableValues = {"시작", "성장", "숙련", "완성"})
             String stageLabel,
-            @Schema(description = "현재 진행 중인 퀘스트의 레벨입니다. 화면 1-2에서 'Lv.{level}' 형식으로 표시합니다.", example = "4")
+            @Schema(description = "현재 진행 중인 퀘스트의 난이도 레벨입니다. 캐릭터 성장 단계(stage)와는 별개의 축입니다. 화면 1-2에서 'Lv.{level}' 형식으로 표시합니다.", example = "4")
             int level,
-            @Schema(description = "다음 수행할 퀘스트 정보입니다. 화면 1-2 카드 '다음 퀘스트' 줄에 사용합니다. 모든 퀘스트가 완료된 경우 null이 반환되며, 완료 축하 메시지를 표시합니다.", nullable = true)
+            @Schema(description = "다음 수행할 OPEN 상태 퀘스트 정보입니다. 가장 낮은 레벨 중 가장 낮은 순서의 OPEN 퀘스트가 선택됩니다. 화면 1-2 카드 '다음 퀘스트' 줄에 사용합니다. 모든 퀘스트가 완료된 경우 null이 반환되며, 완료 축하 메시지를 표시합니다.", nullable = true)
             NextQuestResponse nextQuest,
             @Schema(description = "캐릭터 생성 일시(ISO 8601 UTC)입니다.", nullable = true, example = "2026-07-20T02:00:00Z")
             String createdAt,

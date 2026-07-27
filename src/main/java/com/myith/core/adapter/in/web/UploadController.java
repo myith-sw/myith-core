@@ -77,7 +77,8 @@ public class UploadController {
     record PresignRequest(
             @Schema(description = "업로드할 파일 이름입니다. 확장자를 포함해야 합니다.", example = "portfolio.pdf")
             @NotBlank String fileName,
-            @Schema(description = "MIME 타입입니다. application/pdf, image/png, image/jpeg만 허용됩니다.", example = "application/pdf")
+            @Schema(description = "MIME 타입입니다. application/pdf, image/png, image/jpeg만 허용됩니다. 그 외 타입은 400(UNSUPPORTED_FILE_TYPE) 오류가 반환됩니다.",
+                    example = "application/pdf", allowableValues = {"application/pdf", "image/png", "image/jpeg"})
             @NotBlank String contentType
     ) {}
 

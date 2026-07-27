@@ -82,7 +82,7 @@ public class HeartbeatController {
 
     @Schema(name = "HeartbeatResponse")
     record HeartbeatResponse(
-            @Schema(description = "48시간 미접속 판정 결과입니다. true이면 트레이 알림 또는 복귀 유도 UI를 표시하세요.", example = "true")
+            @Schema(description = "48시간 미접속 판정 결과입니다. true이면 트레이 알림 또는 복귀 유도 UI를 표시하세요. 1회성으로 동작합니다: 48시간 미접속 후 첫 heartbeat에서만 true이며, 이후 heartbeat에서는 사용자가 서비스에 접속해 활동 시각이 갱신될 때까지 false가 반환됩니다.", example = "true")
             boolean nudge,
             @Schema(description = "넛지 종류. nudge=false이면 null", allowableValues = {"ABSENCE_48H"}, nullable = true)
             String nudgeType,
@@ -96,9 +96,9 @@ public class HeartbeatController {
     record CharacterStateResponse(
             @Schema(description = "캐릭터 종류입니다. 트레이 아이콘 이미지 경로를 {species}-{stage}.png 형태로 조합해 사용하세요.", example = "deokbaseu")
             String species,
-            @Schema(description = "캐릭터 성장 단계이며 퀘스트 난이도 레벨(level)과 다른 축입니다. 1~4 범위입니다. species와 조합해 트레이 아이콘 이미지를 선택하세요.", example = "4")
+            @Schema(description = "캐릭터 성장 단계입니다(1=시작, 2=성장, 3=숙련, 4=완성). 퀘스트 난이도 레벨(level)과는 별개의 축입니다. species와 조합해 트레이 아이콘 이미지({species}-{stage}.png)를 선택하세요.", example = "4")
             int stage,
-            @Schema(description = "완료율(%)입니다. 트레이 툴팁 또는 진행률 표시에 사용하세요.", example = "80")
+            @Schema(description = "퀘스트 완료율(%)입니다. DONE + ALREADY_KNOWN 상태 퀘스트의 비율입니다. 트레이 툴팁 또는 진행률 표시에 사용하세요.", example = "80")
             int completionRate
     ) {}
 }

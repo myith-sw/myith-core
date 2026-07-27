@@ -349,9 +349,18 @@ public class QuestController {
             @Schema(description = "역량 축 코드", example = "cs") String axisCode,
             @Schema(description = "역량 축 이름", example = "CS·자료구조") String axisName,
             @Schema(description = "퀘스트 제목", example = "CS 면접 질문을 정리한다") String title,
-            @Schema(description = "화면 4-2 퀘스트 상태", example = "OPEN",
+            @Schema(description = """
+                    퀘스트 상태입니다. 프론트 렌더링 가이드:
+                    ■ LOCKED(흰색/회색): 선행 퀘스트 미완료로 잠김. 클릭 불가, 자물쇠 아이콘 표시.
+                    ■ OPEN(기본색): 수행 가능. 클릭하면 STAR 입력 탭으로 이동.
+                    ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
+                    ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시. STAR 수정은 가능.
+                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되, 펼쳐서 STAR 작성 가능. 완료율에 포함됨.""", example = "OPEN",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
-            @Schema(description = "퀘스트 종류", example = "ACTIVITY",
+            @Schema(description = """
+                    퀘스트 종류입니다. SKILL: 스킬 기반 퀘스트(NCS 능력단위 연계). \
+                    ACTIVITY: 활동형 퀘스트(skill_code 없음, 실습·포트폴리오 중심). \
+                    CUSTOM: 사용자 정의 퀘스트(삭제 가능, NCS 연계 없음).""", example = "ACTIVITY",
                     allowableValues = {"SKILL", "ACTIVITY", "CUSTOM"}) String source,
             @Schema(description = "레벨 내 순서", example = "1") int order,
             @Schema(description = "낙관적 락 버전. PATCH /complete 호출 시 그대로 전달해야 합니다", example = "0") long version,
@@ -408,7 +417,13 @@ public class QuestController {
             @Schema(description = "퀘스트 ID", example = "qst_05") String questId,
             @Schema(description = "저장된 STAR 기록") StarResponse star,
             @Schema(description = "저장 출처", example = "manual") String source,
-            @Schema(description = "저장 후 퀘스트 상태입니다. 최초 저장 시 OPEN → PENDING으로 변경됩니다", example = "PENDING",
+            @Schema(description = """
+                    저장 후 퀘스트 상태입니다. 상태 전이 규칙:
+                    ■ OPEN → PENDING: 최초 STAR 저장 시 자동 전이.
+                    ■ PENDING 유지: 이미 STAR가 있는 상태에서 수정 시.
+                    ■ DONE 유지: 완료된 퀘스트의 STAR를 수정해도 상태는 바뀌지 않음.
+                    ■ ALREADY_KNOWN 유지: 이미 보유 역량의 STAR를 작성해도 상태는 바뀌지 않음.
+                    UI에서는 이 status 값으로 퀘스트 카드의 색상/아이콘을 즉시 갱신하세요.""", example = "PENDING",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = "수정 시각", example = "2026-07-24T03:10:00Z") String updatedAt
     ) {}
@@ -423,10 +438,20 @@ public class QuestController {
 
     @Schema(name = "CompleteResponse")
     record CompleteResponse(
-            @Schema(description = "완료 처리된 퀘스트 정보입니다") CompletedQuestInfo quest,
-            @Schema(description = "완료에 따른 캐릭터 변화 정보입니다") CharacterChanges characterChanges,
-            @Schema(description = "완료 직후 잠금 해제된 퀘스트 ID 목록입니다. 화면 4-1에서 잠금 해제 애니메이션을 적용할 대상이며, 빈 배열이면 해제된 퀘스트가 없습니다") List<String> unlockedQuestIds,
-            @Schema(description = "화면 5 레이더 차트 갱신용 데이터입니다. 이 값을 사용하면 재조회 없이 즉시 반영할 수 있습니다") List<RadarEntry> radar
+            @Schema(description = """
+                    완료 처리된 퀘스트 정보입니다. quest.status로 UI 상태를 즉시 갱신하고, \
+                    quest.version을 로컬에 저장해 다음 요청에 사용하세요.""") CompletedQuestInfo quest,
+            @Schema(description = """
+                    완료에 따른 캐릭터 변화 정보입니다. completionRate로 진행바를 갱신하고, \
+                    stage/stageLabel로 캐릭터 이미지({species}-{stage}.png)를 교체하세요. \
+                    nextQuest가 있으면 '다음 퀘스트' 바로가기 버튼을 표시하세요.""") CharacterChanges characterChanges,
+            @Schema(description = """
+                    완료 직후 잠금 해제된 퀘스트 ID 목록입니다. 화면 4-1에서 해당 퀘스트에 \
+                    잠금 해제 애니메이션을 적용하고 status를 LOCKED → OPEN으로 변경하세요. \
+                    빈 배열이면 해제된 퀘스트가 없습니다.""") List<String> unlockedQuestIds,
+            @Schema(description = """
+                    역량 다각형(레이더) 갱신 데이터입니다. 항상 정확히 6개 축이 반환됩니다. \
+                    이 값으로 레이더 차트를 재조회 없이 즉시 갱신하세요.""") List<RadarEntry> radar
     ) {}
 
     @Schema(name = "CompletedQuestInfo")
@@ -449,9 +474,9 @@ public class QuestController {
 
     @Schema(name = "RadarEntry")
     record RadarEntry(
-            @Schema(description = "역량 축 코드입니다. enum이 아닌 자유 문자열입니다", example = "programming") String axisCode,
-            @Schema(description = "역량 축 이름입니다", example = "프로그래밍 기초") String axisName,
-            @Schema(description = "화면 5 역량 다각형(레이더) 축 값입니다. 계산식: (DONE+ALREADY_KNOWN) / 전체 × 100", example = "72") int percent
+            @Schema(description = "역량 축 코드입니다. enum이 아닌 자유 문자열이며 직무마다 다릅니다.", example = "programming") String axisCode,
+            @Schema(description = "역량 축 이름입니다. 레이더 차트의 각 꼭짓점 레이블로 사용하세요.", example = "프로그래밍 기초") String axisName,
+            @Schema(description = "해당 축의 완료율(%)입니다. 계산식: (DONE+ALREADY_KNOWN) / 전체 × 100. 항상 정확히 6개 축이 반환되므로 정육각형 레이더 차트로 렌더링하세요.", example = "72") int percent
     ) {}
 
     @Schema(name = "AiEnhancementRequest")

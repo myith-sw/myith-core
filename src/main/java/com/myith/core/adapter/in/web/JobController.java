@@ -85,8 +85,8 @@ public class JobController {
             summary = "직무별 역량 축 조회",
             description = """
                     해당 직무의 역량 축(레이더 차트 축) 목록을 반환합니다.
-                    백엔드 개발자의 경우 6각형(프로그래밍기초, CS·자료구조, 데이터입출력, 서버·API, 협업·형상관리, 배포·운영)이 됩니다.
-                    화면에서 레이더 차트의 n각형 축을 구성할 때 사용하세요."""
+                    직무당 정확히 6개의 축이 반환됩니다. 백엔드 개발자의 경우 프로그래밍기초, CS·자료구조, 데이터입출력, 서버·API, 협업·형상관리, 배포·운영입니다.
+                    화면에서 레이더 차트의 6각형 축을 구성할 때 사용하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
             content = @Content(mediaType = "application/json",
@@ -119,9 +119,10 @@ public class JobController {
                     화면 3(자가진단) 진입 시 문항 목록을 가져올 때 호출합니다.
                     문항 개수는 직무마다 다릅니다(6~10개). 배열 길이를 고정하지 마세요.
                     levels는 항상 4단계 고정입니다(unknown → heard → tried → independent 순서).
-                    mastery는 표시 참고용이며, 서버에 응답을 보낼 때는 level의 id 값만 전송하면 됩니다.
+                    mastery 값의 의미: 0=전혀 모름, 0.33=들어본 수준, 0.66=해본 경험 있음(이 값 이상이면 이미 보유한 스킬로 간주), 1.0=혼자 가능한 수준.
+                    mastery는 내부 계산용이며, 서버에 응답을 보낼 때는 levels[].id 값(unknown/heard/tried/independent)을 answers[].mastery로 매핑해 전송합니다.
                     profileVersion은 이 응답에서 받아 보관했다가 POST /api/roadmaps 요청 본문에 그대로 포함해야 합니다.
-                    available: false 직무 코드로 요청하면 404가 반환됩니다."""
+                    GET /api/jobs에서 available: false인 직무 코드로 요청하면 404(JOB_PROFILE_NOT_READY)가 반환됩니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
@@ -216,7 +217,7 @@ public class JobController {
             @Schema(description = "화면 2 직무 카드 하단 키워드 배열(최대 5개)입니다. 프로필이 없으면 빈 배열([])로 내려옵니다.",
                     example = "[\"프로그래밍 기초\",\"CS·자료구조\",\"데이터입출력\",\"서버·API\",\"협업·형상관리\"]")
             List<String> keywords,
-            @Schema(description = "직무 선택 가능 여부입니다. false이면 '준비중' 잠긴 카드로 표시하고 선택을 비활성화해야 합니다.", example = "true")
+            @Schema(description = "직무 선택 가능 여부입니다. false이면 job_profile이 아직 준비되지 않은 상태입니다. '준비중' 잠긴 카드로 표시하고 선택을 비활성화해야 합니다. false인 직무로 자가진단(GET /api/jobs/{jobCode}/diagnosis)을 요청하면 404가 반환됩니다.", example = "true")
             boolean available
     ) {}
 
@@ -249,7 +250,7 @@ public class JobController {
     @Schema(name = "AxesResponse")
     record AxesResponse(
             @Schema(description = "직무 코드", example = "backend") String jobCode,
-            @Schema(description = "역량 축 목록. 레이더 차트의 n각형 축으로 사용합니다.") List<AxisResponse> axes
+            @Schema(description = "역량 축 목록입니다. 직무당 정확히 6개이며, 레이더 차트의 6각형 축으로 사용합니다.") List<AxisResponse> axes
     ) {}
 
     @Schema(name = "AxisResponse")
@@ -265,7 +266,7 @@ public class JobController {
             String id,
             @Schema(description = "화면 3 선택지 버튼 라벨입니다.", example = "해봄")
             String label,
-            @Schema(description = "표시 참고용 내부 M값입니다. 서버로 전송하지 않아도 됩니다.", example = "0.66")
+            @Schema(description = "표시 참고용 내부 보유도(M) 값입니다. 0=전혀 모름, 0.33=들어봄, 0.66=해봄(이 값 이상이면 이미 보유 스킬로 간주됨), 1.0=혼자 가능. 서버로 전송하지 않아도 됩니다.", example = "0.66")
             BigDecimal mastery
     ) {}
 }

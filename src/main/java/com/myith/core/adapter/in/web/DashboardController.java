@@ -44,8 +44,9 @@ public class DashboardController {
                     화면 5(대시보드/신화 페이지)에서 호출합니다.
                     로드맵 상세 → 대시보드 탭 진입 시, 또는 퀘스트 완료 후 대시보드로 돌아올 때 호출하세요.
 
-                    radar는 배열입니다. 축 개수가 직무마다 4~7개로 가변이므로 고정 키 객체로 만들지 마세요.
+                    radar는 배열이며 항상 정확히 6개 축이 반환됩니다. 고정 키 객체로 파싱하지 말고 배열을 순회하세요.
                     percent는 단순 완료율 = (DONE+ALREADY_KNOWN)/전체 × 100입니다. 가중평균이 아닙니다.
+                    레이더 차트는 정육각형으로 렌더링하면 됩니다.
 
                     skillTree는 레벨별로 퀘스트를 묶은 구조입니다. 각 퀘스트의 status에 따라 잠금/활성/완료 표시를 다르게 렌더링하세요.
                     experienceCards는 STAR가 작성된 퀘스트만 포함됩니다. 카드가 없으면 빈 배열([])이 반환됩니다."""
@@ -237,7 +238,7 @@ public class DashboardController {
     @Schema(name = "DashboardResponse")
     record DashboardResponse(
             @Schema(description = "캐릭터 정보입니다. 화면 상단 캐릭터 카드 렌더링에 사용합니다.") DashboardCharacterResponse character,
-            @Schema(description = "역량 다각형(레이더) 데이터입니다. 배열이며 축 개수는 직무마다 4~7개 가변입니다. 고정 키 객체로 파싱하지 마세요.") List<QuestController.RadarEntry> radar,
+            @Schema(description = "역량 다각형(레이더) 데이터입니다. 항상 정확히 6개 축이 반환됩니다. 배열을 순회하여 정육각형 레이더 차트를 렌더링하세요.") List<QuestController.RadarEntry> radar,
             @Schema(description = "레벨별 퀘스트 목록입니다. 스킬 트리 UI를 렌더링할 때 사용합니다.") List<SkillTreeLevelResponse> skillTree,
             @Schema(description = "STAR가 작성된 경험 카드 목록입니다. STAR 기록이 없으면 빈 배열([])이 반환됩니다.") List<StarController.ExperienceCardResponse> experienceCards,
             @Schema(description = "스냅샷 최근 갱신 시각(ISO 8601 UTC)입니다.", example = "2026-07-24T03:00:00Z") String updatedAt
@@ -268,12 +269,12 @@ public class DashboardController {
             @Schema(description = "역량 축 코드입니다.", example = "collaboration") String axisCode,
             @Schema(description = "역량 축 이름입니다.", example = "협업·형상관리") String axisName,
             @Schema(description = """
-                    퀘스트 상태입니다.
-                    LOCKED: 선행 퀘스트 미완료로 잠긴 상태.
-                    OPEN: 수행 가능.
-                    PENDING: STAR 기록이 작성되었으나 완료 처리되지 않은 상태.
-                    DONE: 완료.
-                    ALREADY_KNOWN: 사전 역량 보유(자가진단 mastery ≥ 0.66)로 자동 완료 처리됩니다. 접힌 상태로 표시하세요.""",
+                    퀘스트 상태입니다. 프론트 렌더링 가이드:
+                    ■ LOCKED(흰색/회색): 선행 퀘스트 미완료로 잠김. 클릭 불가, 자물쇠 아이콘 표시.
+                    ■ OPEN(기본색): 수행 가능. 클릭하면 퀘스트 상세(GET /api/quests/{questId})로 이동.
+                    ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
+                    ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시.
+                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되, 펼쳐서 STAR 작성 가능. 완료율에 포함됨.""",
                     example = "DONE",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status
     ) {}

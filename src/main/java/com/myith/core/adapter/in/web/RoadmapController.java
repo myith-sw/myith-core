@@ -511,10 +511,19 @@ public class RoadmapController {
             String axisCode,
             @Schema(description = "역량 축 이름입니다. 퀘스트 카드 태그나 필터 레이블로 사용합니다.", example = "협업·형상관리")
             String axisName,
-            @Schema(description = "퀘스트 상태입니다. LOCKED는 자물쇠 UI로 표시하고 상세 진입을 막으세요. ALREADY_KNOWN은 접힌 상태로 표시합니다. DONE은 완료 뱃지를 표시합니다.", example = "DONE",
+            @Schema(description = """
+                    퀘스트 상태입니다. 프론트 렌더링 가이드:
+                    ■ LOCKED(흰색/회색): 선행 퀘스트 미완료로 잠김. 클릭 불가, 자물쇠 아이콘 표시.
+                    ■ OPEN(기본색): 수행 가능. 클릭하면 퀘스트 상세(GET /api/quests/{questId})로 이동.
+                    ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
+                    ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시.
+                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되, 펼쳐서 STAR 작성 가능. 완료율에 포함됨.""", example = "DONE",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"})
             String status,
-            @Schema(description = "퀘스트 출처입니다. CUSTOM이면 삭제 버튼을 노출합니다.", example = "SKILL",
+            @Schema(description = """
+                    퀘스트 종류입니다. SKILL: 스킬 기반 퀘스트(NCS 능력단위 연계). \
+                    ACTIVITY: 활동형 퀘스트(skill_code 없음, 실습·포트폴리오 중심). \
+                    CUSTOM: 사용자 정의 퀘스트(삭제 가능, NCS 연계 없음).""", example = "SKILL",
                     allowableValues = {"SKILL", "ACTIVITY", "CUSTOM"})
             String source,
             @Schema(description = "레벨 내 정렬 순서입니다.", example = "1")
