@@ -122,6 +122,7 @@ public class QuestController {
                                         },
                                         "source": "manual",
                                         "status": "PENDING",
+                                        "version": 4,
                                         "updatedAt": "2026-07-24T03:10:00Z"
                                       }
                                     }"""))),
@@ -141,16 +142,17 @@ public class QuestController {
             @AuthenticationPrincipal Long userId,
             @PathVariable String questId,
             @Valid @RequestBody SaveStarRequest request) {
-        questDetailService.saveStar(userId, IdCodec.decode(questId),
+        QuestDetailService.SaveStarResult starResult = questDetailService.saveStar(
+                userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
         StarInput s = request.star();
-        // Read actual quest status after save
+        // Read actual quest detail after save for updatedAt
         QuestDetailService.QuestDetailDto detail = questDetailService.getDetail(userId, IdCodec.decode(questId));
         return ResponseEntity.ok(ApiResponse.of(new SaveStarResponse(
                 questId, new StarResponse(s.situation(), s.task(), s.action(), s.result()),
                 request.source() != null ? request.source() : "manual",
-                detail.status(), detail.updatedAt()
+                starResult.status(), starResult.version(), detail.updatedAt()
         )));
     }
 
@@ -159,8 +161,12 @@ public class QuestController {
     @Operation(
             summary = "퀘스트 완료 토글",
             description = """
-                    화면 4-2(퀘스트 상세)의 '완료' 버튼 탭 시 호출합니다.
-                    STAR 본문은 이 API에서 받지 않습니다. PUT /star로 미리 저장된 값을 사용합니다.
+                    퀘스트 완료 상태를 토글합니다.
+                    ★ star 를 함께 보내면 STAR 저장과 완료가 한 트랜잭션에서 처리됩니다.
+                      PUT /api/quests/{id}/star 를 먼저 호출한 뒤 완료를 호출하면
+                      저장이 version 을 올려 409 VERSION_CONFLICT 가 발생할 수 있습니다.
+                      "작성 후 완료" UI 라면 star 를 포함한 이 요청 한 번만 보내세요.
+                    star 를 생략하면 완료 토글만 수행합니다(기존 동작).
                     응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
                     unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
                     409 VERSION_CONFLICT 수신 시, 퀘스트 상세를 재조회한 뒤 새 version 값으로 재시도하세요.
@@ -229,8 +235,12 @@ public class QuestController {
             @PathVariable String questId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CompleteRequest request) {
+        QuestDetailService.StarDto starDto = request.star() != null
+                ? new QuestDetailService.StarDto(request.star().situation(), request.star().task(),
+                        request.star().action(), request.star().result())
+                : null;
         QuestDetailService.ToggleResult result =
-                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version());
+                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version(), starDto);
 
         CompletedQuestInfo questInfo = new CompletedQuestInfo(
                 IdCodec.encode(result.questId(), "qst_"),
@@ -355,7 +365,8 @@ public class QuestController {
                     ■ OPEN(기본색): 수행 가능. 클릭하면 STAR 입력 탭으로 이동.
                     ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
                     ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시. STAR 수정은 가능.
-                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되, 펼쳐서 STAR 작성 가능. 완료율에 포함됨.""", example = "OPEN",
+                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되,
+                       펼쳐서 STAR 작성 가능. 완료율에 포함됨. STAR를 작성해도 DONE으로 바뀌지 않습니다(이미 완료 집계).""", example = "OPEN",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = """
                     퀘스트 종류입니다. SKILL: 스킬 기반 퀘스트(NCS 능력단위 연계). \
@@ -425,6 +436,11 @@ public class QuestController {
                     ■ ALREADY_KNOWN 유지: 이미 보유 역량의 STAR를 작성해도 상태는 바뀌지 않음.
                     UI에서는 이 status 값으로 퀘스트 카드의 색상/아이콘을 즉시 갱신하세요.""", example = "PENDING",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
+            @Schema(description = """
+                    저장 후의 낙관적 락 버전입니다.
+                    이어서 PATCH /api/quests/{id}/complete 를 호출한다면 이 값을 그대로 사용하세요.
+                    요청 시점의 옛 version 을 쓰면 409 VERSION_CONFLICT 가 발생합니다.""",
+                    example = "4") long version,
             @Schema(description = "수정 시각", example = "2026-07-24T03:10:00Z") String updatedAt
     ) {}
 
@@ -433,7 +449,11 @@ public class QuestController {
             @Schema(description = "true면 완료 처리, false면 완료 취소(DONE → OPEN)입니다", example = "true")
             @NotNull Boolean completed,
             @Schema(description = "낙관적 락 버전입니다. GET /api/roadmaps/{id} 또는 GET /api/quests/{id}에서 받은 version 값을 그대로 전달하세요. 409 VERSION_CONFLICT 수신 시 퀘스트 상세 재조회 후 새 version으로 재시도하세요", example = "3")
-            @NotNull Long version
+            @NotNull Long version,
+            @Schema(description = "함께 저장할 STAR 내용입니다. 생략하면 완료 토글만 수행합니다(기존 동작). " +
+                    "PUT /api/quests/{id}/star를 먼저 호출한 뒤 완료를 호출하면 저장이 version을 올려 409 VERSION_CONFLICT가 발생할 수 있습니다. " +
+                    "'작성 후 완료' UI라면 star를 포함한 이 요청 한 번만 보내세요.", nullable = true)
+            @Valid StarInput star
     ) {}
 
     @Schema(name = "CompleteResponse")

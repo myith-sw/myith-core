@@ -128,8 +128,8 @@ class QuestUnlockPolicyTest {
     }
 
     @Test
-    @DisplayName("완료를 해제하면 다음 레벨의 미완료 퀘스트가 LOCKED로 되돌아간다")
-    void undoCompletionRelocksNextLevel() {
+    @DisplayName("완료를 해제해도 이미 OPEN인 퀘스트는 LOCKED로 되돌아가지 않는다 (단조성)")
+    void undoCompletionDoesNotRelockOpenQuest() {
         idSeq = 1;
         Quest q1 = skillQuest(1, "java", QuestStatus.DONE);
         Quest q2 = skillQuest(1, "spring", QuestStatus.OPEN);   // 완료 해제됨
@@ -138,7 +138,7 @@ class QuestUnlockPolicyTest {
         var changes = QuestUnlockPolicy.recompute(List.of(q1, q2, q3), List.of());
 
         Map<Long, QuestStatus> map = toMap(changes);
-        assertEquals(QuestStatus.LOCKED, map.get(q3.getId()));
+        assertFalse(map.containsKey(q3.getId()), "OPEN 퀘스트는 LOCKED로 되돌아가지 않아야 한다");
     }
 
     @Test
@@ -169,16 +169,16 @@ class QuestUnlockPolicyTest {
     }
 
     @Test
-    @DisplayName("활동형은 레벨이 잠기면 LOCKED")
-    void activityQuestLockedWhenLevelLocked() {
+    @DisplayName("활동형이 LOCKED 상태이고 레벨이 잠기면 LOCKED 유지")
+    void activityQuestStaysLockedWhenLevelLocked() {
         idSeq = 1;
         Quest q1 = skillQuest(1, "java", QuestStatus.OPEN);   // Lv1 미완료
-        Quest activity = activityQuest(2, QuestStatus.OPEN);
+        Quest activity = activityQuest(2, QuestStatus.LOCKED);
 
         var changes = QuestUnlockPolicy.recompute(List.of(q1, activity), List.of());
 
         Map<Long, QuestStatus> map = toMap(changes);
-        assertEquals(QuestStatus.LOCKED, map.get(activity.getId()));
+        assertFalse(map.containsKey(activity.getId()), "LOCKED 유지 → 변경 없음");
     }
 
     @Test
@@ -198,18 +198,71 @@ class QuestUnlockPolicyTest {
     }
 
     @Test
-    @DisplayName("연쇄 해금: Lv2 전부 미완료면 Lv3도 잠김")
-    void chainedUnlock() {
+    @DisplayName("연쇄 해금: Lv2 미완료여도 Lv3이 이미 OPEN이면 유지 (단조성)")
+    void chainedUnlock_openStaysOpen() {
         idSeq = 1;
         Quest q1 = skillQuest(1, "java", QuestStatus.DONE);
         Quest q2 = skillQuest(1, "spring", QuestStatus.DONE);
         Quest q3 = skillQuest(2, "jpa", QuestStatus.OPEN);      // Lv2 미완료
-        Quest q4 = skillQuest(3, "security", QuestStatus.OPEN);
+        Quest q4 = skillQuest(3, "security", QuestStatus.OPEN);  // 이미 OPEN
 
         var changes = QuestUnlockPolicy.recompute(List.of(q1, q2, q3, q4), List.of());
 
         Map<Long, QuestStatus> map = toMap(changes);
-        assertFalse(map.containsKey(q3.getId()));  // Lv2 열림 (Lv1 전부 완료)
-        assertEquals(QuestStatus.LOCKED, map.get(q4.getId()));  // Lv3 잠김 (Lv2 미완료)
+        assertFalse(map.containsKey(q3.getId()));  // Lv2 열림 유지
+        assertFalse(map.containsKey(q4.getId()), "이미 OPEN인 Lv3 퀘스트는 LOCKED로 되돌아가지 않는다");
+    }
+
+    // ===== 단조성(monotonic) 테스트 =====
+
+    @Test
+    @DisplayName("CUSTOM 퀘스트 추가로 total이 늘어도 이미 OPEN인 상위 레벨은 잠기지 않는다")
+    void addCustomQuestDoesNotRelockUpperLevels() {
+        idSeq = 1;
+        Quest q1 = skillQuest(1, "java", QuestStatus.DONE);
+        Quest q2 = skillQuest(1, "spring", QuestStatus.DONE);
+        Quest q3 = skillQuest(2, "jpa", QuestStatus.DONE);
+        Quest q4 = skillQuest(2, "sql", QuestStatus.DONE);
+        Quest q5 = skillQuest(3, "rest", QuestStatus.OPEN);     // Lv3 열려있음
+        // Lv2에 CUSTOM 추가 → total 증가, completed < total
+        Quest custom = Quest.restore(idSeq++, 1L, null, "axis1",
+                2, 2, "Custom Quest", null, null,
+                QuestSource.CUSTOM, QuestStatus.OPEN, null, 0, Instant.now(), Instant.now());
+
+        var changes = QuestUnlockPolicy.recompute(
+                List.of(q1, q2, q3, q4, q5, custom), List.of());
+
+        Map<Long, QuestStatus> map = toMap(changes);
+        assertFalse(map.containsKey(q5.getId()),
+                "Lv3이 이미 OPEN이면 Lv2에 퀘스트를 추가해도 LOCKED로 되돌아가지 않아야 한다");
+    }
+
+    @Test
+    @DisplayName("LOCKED→OPEN 방향 해금은 여전히 동작한다")
+    void lockedToOpenStillWorks() {
+        idSeq = 1;
+        Quest q1 = skillQuest(1, "java", QuestStatus.DONE);
+        Quest q2 = skillQuest(1, "spring", QuestStatus.DONE);
+        Quest q3 = skillQuest(2, "jpa", QuestStatus.LOCKED);
+
+        var changes = QuestUnlockPolicy.recompute(List.of(q1, q2, q3), List.of());
+
+        Map<Long, QuestStatus> map = toMap(changes);
+        assertEquals(QuestStatus.OPEN, map.get(q3.getId()), "LOCKED→OPEN 해금은 정상 동작해야 한다");
+    }
+
+    @Test
+    @DisplayName("연쇄 해금: Lv2 미완료이고 Lv3이 LOCKED이면 LOCKED 유지")
+    void chainedUnlock_lockedStaysLocked() {
+        idSeq = 1;
+        Quest q1 = skillQuest(1, "java", QuestStatus.DONE);
+        Quest q2 = skillQuest(1, "spring", QuestStatus.DONE);
+        Quest q3 = skillQuest(2, "jpa", QuestStatus.OPEN);      // Lv2 미완료
+        Quest q4 = skillQuest(3, "security", QuestStatus.LOCKED);
+
+        var changes = QuestUnlockPolicy.recompute(List.of(q1, q2, q3, q4), List.of());
+
+        Map<Long, QuestStatus> map = toMap(changes);
+        assertFalse(map.containsKey(q4.getId()), "Lv3 LOCKED 유지 → 변경 없음");
     }
 }

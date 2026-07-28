@@ -115,8 +115,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RoadmapCreateService.DuplicateSpeciesException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateSpecies(RoadmapCreateService.DuplicateSpeciesException e) {
+        log.debug("Duplicate species attempt: {}", e.getSpecies());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of("DUPLICATE_SPECIES", e.getMessage(), requestId()));
+                .body(ErrorResponse.of("SPECIES_ALREADY_OWNED", "이미 보유한 캐릭터입니다. 다른 알을 선택해주세요.", requestId()));
     }
 
     @ExceptionHandler(ExportService.UnsupportedFormatException.class)
