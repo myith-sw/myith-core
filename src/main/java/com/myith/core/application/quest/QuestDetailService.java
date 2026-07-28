@@ -90,7 +90,7 @@ public class QuestDetailService {
 
         return new QuestDetailDto(quest.getId(), quest.getRoadmapId(), quest.getTitle(),
                 quest.getAxisCode(), axisName, quest.getLevel(),
-                quest.getStatus().name(), quest.getSource().name(),
+                quest.getStatus().toApiName(), quest.getSource().name(),
                 quest.getOrderInLevel(), quest.getVersion(),
                 ncsUnit, certifications, quest.getCompletionCriteria(), star, updatedAt);
     }
@@ -104,7 +104,7 @@ public class QuestDetailService {
      * @return 컨트롤러가 응답을 조립할 수 있도록 결과를 반환한다.
      */
     @Transactional
-    public ToggleResult toggleComplete(Long userId, Long questId, boolean completed, long version,
+    public ToggleResult toggleComplete(Long userId, Long questId, boolean completed,
                                        StarDto star) {
         Quest initialQuest = questRepository.findById(questId)
                 .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
@@ -115,12 +115,6 @@ public class QuestDetailService {
 
         if (initialQuest.getStatus() == QuestStatus.LOCKED) {
             throw new QuestManageService.QuestLockedException(questId);
-        }
-
-        // 낙관적 락 검증
-        if (initialQuest.getVersion() != version) {
-            throw new QuestManageService.OptimisticLockConflictException(
-                    "Quest version mismatch: expected " + version + ", actual " + initialQuest.getVersion());
         }
 
         // star가 함께 왔으면 같은 트랜잭션에서 STAR 저장 먼저 처리
@@ -368,7 +362,7 @@ public class QuestDetailService {
         // 저장 후 최신 상태를 읽어 반환
         Quest saved = questRepository.findById(questId)
                 .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
-        return new SaveStarResult(saved.getStatus().name(), saved.getVersion());
+        return new SaveStarResult(saved.getStatus().toApiName(), saved.getVersion());
     }
 
     // STAR AI 보완 요청 -> Outbox 발행 -> 202

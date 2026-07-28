@@ -271,12 +271,11 @@ public class DashboardController {
             @Schema(description = """
                     퀘스트 상태입니다. 프론트 렌더링 가이드:
                     ■ LOCKED(흰색/회색): 선행 퀘스트 미완료로 잠김. 클릭 불가, 자물쇠 아이콘 표시.
-                    ■ OPEN(기본색): 수행 가능. 클릭하면 퀘스트 상세(GET /api/quests/{questId})로 이동.
-                    ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
+                    ■ OPEN(기본색): 수행 가능. STAR 작성 중인 퀘스트도 OPEN으로 표시됨. 클릭하면 퀘스트 상세(GET /api/quests/{questId})로 이동.
                     ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시.
                     ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되,
                        펼쳐서 STAR 작성 가능. 완료율에 포함됨. STAR를 작성해도 DONE으로 바뀌지 않습니다(이미 완료 집계).""",
                     example = "DONE",
-                    allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status
+                    allowableValues = {"LOCKED", "OPEN", "DONE", "ALREADY_KNOWN"}) String status
     ) {}
 }

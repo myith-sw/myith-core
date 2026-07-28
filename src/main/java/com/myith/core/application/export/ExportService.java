@@ -86,7 +86,7 @@ public class ExportService {
                             .orElse(null);
                     String axisName = axisNameMap.getOrDefault(q.getAxisCode(), q.getAxisCode());
                     byLevel.computeIfAbsent(q.getLevel(), k -> new ArrayList<>())
-                            .add(new ExportData.QuestExport(q.getTitle(), axisName, q.getStatus().name(), star));
+                            .add(new ExportData.QuestExport(q.getTitle(), axisName, q.getStatus().toApiName(), star));
                 });
 
         List<ExportData.LevelExport> levels = byLevel.entrySet().stream()
