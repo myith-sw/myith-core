@@ -29,8 +29,6 @@ dependencies {
 
     // Database
     runtimeOnly("org.postgresql:postgresql")
-    implementation("org.flywaydb:flyway-core")
-    implementation("org.flywaydb:flyway-database-postgresql")
 
     // Cache
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
