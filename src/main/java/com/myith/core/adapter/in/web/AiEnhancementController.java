@@ -64,9 +64,9 @@ public class AiEnhancementController {
                     - resumeDraft: 자기소개서 초안 영역에 표시합니다.
                     서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /api/quests/{questId}/star로 저장하세요.
 
-                    FAILED 시 enhancedStar·feedback·resumeDraft 는 모두 null 입니다.
-                    errorCode 를 보고 프론트에서 안내 문구를 표시하세요.
-                    비교 모달을 열지 말고 토스트나 인라인 메시지로 처리하는 것을 권장합니다.
+                    FAILED 시에도 enhancedStar(에러 안내 문구)와 feedback(빈 배열)을 포함합니다.
+                    프론트는 enhancedStar를 null 체크 없이 렌더링할 수 있습니다.
+                    FAILED일 때는 '적용' 버튼을 숨기고 errorCode에 맞는 안내를 표시하세요.
                     errorCode 종류: AI_PROVIDER_TIMEOUT(Worker LLM 호출 실패),
                                   AI_TIMEOUT(서버 대기 60초 초과), INTERNAL_ERROR(내부 오류)."""
     )
@@ -109,6 +109,13 @@ public class AiEnhancementController {
                                       "data": {
                                         "requestId": "aie_01J3ABC",
                                         "status": "FAILED",
+                                        "enhancedStar": {
+                                          "situation": "AI 보완에 실패했습니다.",
+                                          "task": "",
+                                          "action": "",
+                                          "result": ""
+                                        },
+                                        "feedback": [],
                                         "errorCode": "AI_PROVIDER_TIMEOUT"
                                       }
                                     }"""),
@@ -117,6 +124,13 @@ public class AiEnhancementController {
                                       "data": {
                                         "requestId": "aie_01J3ABC",
                                         "status": "FAILED",
+                                        "enhancedStar": {
+                                          "situation": "AI 처리 시간이 초과되었습니다.",
+                                          "task": "",
+                                          "action": "",
+                                          "result": ""
+                                        },
+                                        "feedback": [],
                                         "errorCode": "AI_TIMEOUT"
                                       }
                                     }""")
@@ -171,7 +185,8 @@ public class AiEnhancementController {
         if (Duration.between(createdAt.get(), Instant.now()).getSeconds() > timeoutSeconds) {
             return ResponseEntity.ok(ApiResponse.of(
                     new AiEnhancementResultResponse(requestId, null, "FAILED",
-                            null, null, null, "AI_TIMEOUT", null)));
+                            new EnhancedStar("AI 처리 시간이 초과되었습니다.", "", "", ""),
+                            List.of(), null, "AI_TIMEOUT", null)));
         }
 
         return ResponseEntity.ok(ApiResponse.of(
@@ -199,7 +214,8 @@ public class AiEnhancementController {
                 String errorCode = node.has("errorCode") ? node.get("errorCode").asText() : null;
                 return ResponseEntity.ok(ApiResponse.of(
                         new AiEnhancementResultResponse(requestId, null, "FAILED",
-                                null, null, null, errorCode, null)));
+                                new EnhancedStar("AI 보완에 실패했습니다.", "", "", ""),
+                                List.of(), null, errorCode, null)));
             }
 
             EnhancedStar enhancedStar = null;
@@ -231,7 +247,8 @@ public class AiEnhancementController {
         } catch (Exception e) {
             return ResponseEntity.ok(ApiResponse.of(
                     new AiEnhancementResultResponse(requestId, null, "FAILED",
-                            null, null, null, "INTERNAL_ERROR", null)));
+                            new EnhancedStar("AI 보완 중 오류가 발생했습니다.", "", "", ""),
+                            List.of(), null, "INTERNAL_ERROR", null)));
         }
     }
 
