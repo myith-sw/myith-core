@@ -28,8 +28,8 @@ public class SnapshotCalculator {
                     currentMaxStage, List.of());
         }
 
-        // 완료율
-        long completed = quests.stream().filter(q -> q.getStatus().isCompleted()).count();
+        // 완료율: DONE만 집계 (ALREADY_KNOWN은 제외)
+        long completed = quests.stream().filter(q -> q.getStatus().isDone()).count();
         BigDecimal completionRate = BigDecimal.valueOf(completed * 100)
                 .divide(BigDecimal.valueOf(quests.size()), 2, RoundingMode.HALF_UP);
 

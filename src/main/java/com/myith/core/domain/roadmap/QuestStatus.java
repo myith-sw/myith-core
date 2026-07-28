@@ -7,8 +7,20 @@ public enum QuestStatus {
     DONE,
     ALREADY_KNOWN;
 
+    /**
+     * 레벨 해금 판정용. DONE + ALREADY_KNOWN 모두 포함.
+     * 경력자가 상위 레벨을 바로 볼 수 있도록 한다.
+     */
     public boolean isCompleted() {
         return this == DONE || this == ALREADY_KNOWN;
+    }
+
+    /**
+     * 진행률·레이더 집계용. DONE만 포함.
+     * ALREADY_KNOWN은 아직 STAR를 작성하지 않았으므로 진행률에서 제외.
+     */
+    public boolean isDone() {
+        return this == DONE;
     }
 
     /**

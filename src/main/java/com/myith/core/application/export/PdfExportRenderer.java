@@ -6,7 +6,10 @@ import org.xhtmlrenderer.pdf.ITextFontResolver;
 import org.xhtmlrenderer.pdf.ITextRenderer;
 
 import java.io.ByteArrayOutputStream;
-import java.net.URL;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 @Component
 public class PdfExportRenderer implements ExportRenderer {
@@ -14,14 +17,16 @@ public class PdfExportRenderer implements ExportRenderer {
     private static final String FONT_PATH = "/fonts/NotoSansKR-Regular.ttf";
     private static final String FONT_FAMILY = "Noto Sans KR";
 
+    private volatile String fontFilePath;
+
     @Override
     public byte[] render(ExportData data) {
-        String fontUrl = resolveFontUrl();
-        String html = buildHtml(data, fontUrl);
+        String fontPath = ensureFontFile();
+        String html = buildHtml(data, fontPath);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             ITextRenderer renderer = new ITextRenderer();
             ITextFontResolver fontResolver = renderer.getFontResolver();
-            fontResolver.addFont(fontUrl, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            fontResolver.addFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
             renderer.setDocumentFromString(html);
             renderer.layout();
             renderer.createPDF(out);
@@ -31,12 +36,29 @@ public class PdfExportRenderer implements ExportRenderer {
         }
     }
 
-    private String resolveFontUrl() {
-        URL resource = getClass().getResource(FONT_PATH);
-        if (resource == null) {
-            throw new IllegalStateException("Korean font not found on classpath: " + FONT_PATH);
+    /**
+     * classpath의 폰트를 임시 파일로 추출한다.
+     * Flying Saucer의 addFont()는 jar: URL을 처리하지 못하므로 실제 파일 경로가 필요하다.
+     */
+    private String ensureFontFile() {
+        if (fontFilePath != null) return fontFilePath;
+        synchronized (this) {
+            if (fontFilePath != null) return fontFilePath;
+            try (InputStream is = getClass().getResourceAsStream(FONT_PATH)) {
+                if (is == null) {
+                    throw new IllegalStateException("Korean font not found on classpath: " + FONT_PATH);
+                }
+                Path tempFile = Files.createTempFile("NotoSansKR", ".ttf");
+                Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+                tempFile.toFile().deleteOnExit();
+                fontFilePath = tempFile.toAbsolutePath().toString();
+                return fontFilePath;
+            } catch (IllegalStateException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to extract font file", e);
+            }
         }
-        return resource.toExternalForm();
     }
 
     @Override
@@ -49,7 +71,8 @@ public class PdfExportRenderer implements ExportRenderer {
         return "pdf";
     }
 
-    private String buildHtml(ExportData data, String fontUrl) {
+    private String buildHtml(ExportData data, String fontPath) {
+        String fontUrl = "file:///" + fontPath.replace("\\", "/");
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n");

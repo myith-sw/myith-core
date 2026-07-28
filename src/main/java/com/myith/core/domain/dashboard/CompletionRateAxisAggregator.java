@@ -7,7 +7,8 @@ import java.math.RoundingMode;
 import java.util.List;
 
 /**
- * 축 % = count(DONE + ALREADY_KNOWN) / count(전체) × 100
+ * 축 % = count(DONE) / count(전체) × 100
+ * ALREADY_KNOWN은 진행률에서 제외한다.
  */
 public class CompletionRateAxisAggregator implements AxisAggregator {
 
@@ -16,7 +17,7 @@ public class CompletionRateAxisAggregator implements AxisAggregator {
         if (questsInAxis.isEmpty()) return BigDecimal.ZERO;
 
         long completed = questsInAxis.stream()
-                .filter(q -> q.getStatus().isCompleted())
+                .filter(q -> q.getStatus().isDone())
                 .count();
 
         return BigDecimal.valueOf(completed * 100)

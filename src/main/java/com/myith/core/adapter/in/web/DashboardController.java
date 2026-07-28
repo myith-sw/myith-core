@@ -129,7 +129,7 @@ public class DashboardController {
         // 완료 퀘스트 수 계산
         long completedQuestCount = dto.skillTree().stream()
                 .flatMap(st -> st.quests().stream())
-                .filter(q -> "DONE".equals(q.status()) || "ALREADY_KNOWN".equals(q.status()))
+                .filter(q -> "DONE".equals(q.status()))
                 .count();
 
         // 현재 레벨 계산 (OPEN 또는 DONE 상태의 퀘스트 중 최고 레벨)
