@@ -90,6 +90,11 @@ public class QuestUnlockPolicy {
 
             QuestStatus target = (levelUnlocked && prereqsMet) ? QuestStatus.OPEN : QuestStatus.LOCKED;
 
+            // 이미 열린 퀘스트를 다시 잠그지 않는다 (단조성).
+            // 퀘스트 추가·삭제·완료 취소로 레벨 total이 변해도
+            // 이미 OPEN인 퀘스트가 LOCKED로 되돌아가면 안 된다.
+            if (current == QuestStatus.OPEN && target == QuestStatus.LOCKED) continue;
+
             // 5. 현재 상태와 목표 상태가 다른 것만 반환
             if (current != target) {
                 changes.add(new StatusChange(quest.getId(), target));

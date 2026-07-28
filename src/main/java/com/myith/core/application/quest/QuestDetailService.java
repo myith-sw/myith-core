@@ -104,22 +104,34 @@ public class QuestDetailService {
      * @return 컨트롤러가 응답을 조립할 수 있도록 결과를 반환한다.
      */
     @Transactional
-    public ToggleResult toggleComplete(Long userId, Long questId, boolean completed, long version) {
-        Quest quest = questRepository.findById(questId)
+    public ToggleResult toggleComplete(Long userId, Long questId, boolean completed, long version,
+                                       StarDto star) {
+        Quest initialQuest = questRepository.findById(questId)
                 .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
 
-        Roadmap roadmap = roadmapRepository.findById(quest.getRoadmapId())
-                .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
+        Roadmap roadmap = roadmapRepository.findById(initialQuest.getRoadmapId())
+                .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(initialQuest.getRoadmapId()));
         RoadmapQueryService.validateOwnership(roadmap, userId);
 
-        if (quest.getStatus() == QuestStatus.LOCKED) {
+        if (initialQuest.getStatus() == QuestStatus.LOCKED) {
             throw new QuestManageService.QuestLockedException(questId);
         }
 
         // 낙관적 락 검증
-        if (quest.getVersion() != version) {
+        if (initialQuest.getVersion() != version) {
             throw new QuestManageService.OptimisticLockConflictException(
-                    "Quest version mismatch: expected " + version + ", actual " + quest.getVersion());
+                    "Quest version mismatch: expected " + version + ", actual " + initialQuest.getVersion());
+        }
+
+        // star가 함께 왔으면 같은 트랜잭션에서 STAR 저장 먼저 처리
+        Quest quest;
+        if (star != null) {
+            saveStar(userId, questId, star.situation(), star.task(), star.action(), star.result());
+            // saveStar가 version을 올릴 수 있으므로 최신 퀘스트를 다시 읽는다
+            quest = questRepository.findById(questId)
+                    .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
+        } else {
+            quest = initialQuest;
         }
 
         // Bug B-2: completed=false일 때 STAR 존재 여부에 따라 PENDING 또는 OPEN
@@ -308,8 +320,8 @@ public class QuestDetailService {
 
     // STAR 저장/갱신
     @Transactional
-    public void saveStar(Long userId, Long questId,
-                         String situation, String task, String action, String result) {
+    public SaveStarResult saveStar(Long userId, Long questId,
+                                   String situation, String task, String action, String result) {
         Quest quest = questRepository.findById(questId)
                 .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
 
@@ -352,6 +364,11 @@ public class QuestDetailService {
                     quest.getCreatedAt(), Instant.now());
             questRepository.save(updated);
         }
+
+        // 저장 후 최신 상태를 읽어 반환
+        Quest saved = questRepository.findById(questId)
+                .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
+        return new SaveStarResult(saved.getStatus().name(), saved.getVersion());
     }
 
     // STAR AI 보완 요청 -> Outbox 발행 -> 202
@@ -403,6 +420,8 @@ public class QuestDetailService {
     public record NcsUnitDto(String code, String name, String description) {}
     public record CertDto(String name) {}
     public record StarDto(String situation, String task, String action, String result) {}
+
+    public record SaveStarResult(String status, long version) {}
 
     public record ToggleResult(Long questId, QuestStatus newStatus, long newVersion,
                                Instant completedAt, List<Long> unlockedQuestIds,

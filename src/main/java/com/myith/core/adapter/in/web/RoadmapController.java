@@ -87,6 +87,18 @@ public class RoadmapController {
                                         "generationState": "ANALYZING"
                                       }
                                     }"""))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "SPECIES_ALREADY_OWNED — 이미 보유한 캐릭터 종류. " +
+                            "이 오류는 알 선택 화면에서 미리 막을 수 있습니다. " +
+                            "GET /api/characters 응답의 characters[].species 목록에 있는 종은 비활성 처리하세요.",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "error": {
+                                        "code": "SPECIES_ALREADY_OWNED",
+                                        "message": "이미 보유한 캐릭터입니다. 다른 알을 선택해주세요."
+                                      }
+                                    }"""))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "VALIDATION_ERROR",
                     content = @Content(mediaType = "application/json",
                             examples = @ExampleObject(value = """
@@ -404,7 +416,13 @@ public class RoadmapController {
             @NotBlank String jobCode,
             @Schema(description = "GET /api/jobs/{jobCode}/diagnosis 응답에서 받은 profileVersion을 그대로 전달합니다.", example = "1")
             @NotNull Integer profileVersion,
-            @Schema(description = "캐릭터 종류입니다. 프론트 assets 22종 중 하나를 선택합니다. enum이 아닌 자유 문자열입니다.", example = "deokbaseu")
+            @Schema(description = """
+                    캐릭터 종류입니다. 알 선택 화면(1-1)에서 고른 값을 그대로 전달합니다.
+                    ★ 한 사용자는 같은 종을 두 번 가질 수 없습니다.
+                      GET /api/characters 의 characters[].species 에 이미 있는 값을 보내면
+                      409 SPECIES_ALREADY_OWNED 가 반환됩니다.
+                      알 선택 화면에서 해당 종을 비활성 처리하세요.""",
+                    example = "deokbaseu")
             @NotBlank String species,
             @Schema(description = "캐릭터 닉네임입니다. trim 후 1~20자이며 생략하면 null로 저장됩니다.", example = "견습 서버 개발자")
             @Size(min = 1, max = 20) String nickname,
@@ -517,7 +535,8 @@ public class RoadmapController {
                     ■ OPEN(기본색): 수행 가능. 클릭하면 퀘스트 상세(GET /api/quests/{questId})로 이동.
                     ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
                     ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시.
-                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되, 펼쳐서 STAR 작성 가능. 완료율에 포함됨.""", example = "DONE",
+                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되,
+                       펼쳐서 STAR 작성 가능. 완료율에 포함됨. STAR를 작성해도 DONE으로 바뀌지 않습니다(이미 완료 집계).""", example = "DONE",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"})
             String status,
             @Schema(description = """
@@ -554,7 +573,15 @@ public class RoadmapController {
             String axisName,
             @Schema(description = "배치된 레벨입니다.", example = "3")
             int level,
-            @Schema(description = "초기 상태입니다. 생성 직후에는 항상 OPEN입니다.", example = "OPEN",
+            @Schema(description = """
+                    퀘스트 상태입니다. 프론트 렌더링 가이드:
+                    ■ LOCKED(흰색/회색): 선행 퀘스트 미완료로 잠김. 클릭 불가, 자물쇠 아이콘 표시.
+                    ■ OPEN(기본색): 수행 가능. 클릭하면 STAR 입력 탭으로 이동.
+                    ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
+                    ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시. STAR 수정은 가능.
+                    ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되,
+                       펼쳐서 STAR 작성 가능. 완료율에 포함됨. STAR를 작성해도 DONE으로 바뀌지 않습니다(이미 완료 집계).
+                    생성 직후에는 항상 OPEN입니다.""", example = "OPEN",
                     allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"})
             String status,
             @Schema(description = "퀘스트 출처입니다. 사용자 정의 퀘스트는 항상 CUSTOM입니다.", example = "CUSTOM")
