@@ -16,6 +16,8 @@ spring:
       hibernate:
         default_schema: public
         format_sql: true
+        hbm2ddl:
+          schema_filter_provider: com.myith.core.config.WorkerOwnedTableFilter
 
   data:
     redis:
