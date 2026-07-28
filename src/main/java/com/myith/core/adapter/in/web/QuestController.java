@@ -229,7 +229,7 @@ public class QuestController {
 
         CompletedQuestInfo questInfo = new CompletedQuestInfo(
                 IdCodec.encode(result.questId(), "qst_"),
-                result.newStatus().name(),
+                result.newStatus().toApiName(),
                 result.completedAt() != null ? result.completedAt().toString() : null,
                 result.newVersion()
         );

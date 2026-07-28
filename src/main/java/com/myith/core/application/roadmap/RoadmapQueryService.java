@@ -158,7 +158,9 @@ public class RoadmapQueryService {
                     snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO,
                     snapshot != null ? snapshot.stage() : stagePolicy.initialStage(),
                     currentLevel,
-                    nextQuest != null ? new NextQuestDto(nextQuest.getId(), nextQuest.getTitle()) : null
+                    nextQuest != null ? new NextQuestDto(nextQuest.getId(), nextQuest.getTitle()) : null,
+                    character.getCreatedAt() != null ? character.getCreatedAt().toString() : null,
+                    character.getUpdatedAt() != null ? character.getUpdatedAt().toString() : null
             ));
         }
         return result;
@@ -240,7 +242,8 @@ public class RoadmapQueryService {
     public record CharacterListDto(Long characterId, Long roadmapId, String species, String nickname,
                                    String jobCode, String jobName, String tagline,
                                    String roadmapStatus, BigDecimal completionRate, String stage,
-                                   int level, NextQuestDto nextQuest) {}
+                                   int level, NextQuestDto nextQuest,
+                                   String createdAt, String updatedAt) {}
     public record NextQuestDto(Long questId, String title) {}
 
     public static class RoadmapNotFoundException extends RuntimeException {

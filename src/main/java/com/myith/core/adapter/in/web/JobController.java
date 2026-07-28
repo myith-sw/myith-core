@@ -69,13 +69,16 @@ public class JobController {
     @GetMapping
     public ResponseEntity<ApiResponse<JobListResponse>> getJobs() {
         List<JobQueryService.CategoryDto> categories = jobQueryService.getJobList();
+        var categoryList = categories.stream().toList();
         return ResponseEntity.ok(ApiResponse.of(new JobListResponse(
-                categories.stream().map(c -> new CategoryResponse(
-                        c.categoryCode(), c.categoryName(), 1,
+                java.util.stream.IntStream.range(0, categoryList.size()).mapToObj(i -> {
+                    var c = categoryList.get(i);
+                    return new CategoryResponse(
+                        c.categoryCode(), c.categoryName(), i + 1,
                         c.jobs().stream().map(j -> new JobResponse(
                                 j.jobCode(), j.jobName(), j.tagline(), j.keywords(), j.available()
-                        )).toList()
-                )).toList()
+                        )).toList());
+                }).toList()
         )));
     }
 
