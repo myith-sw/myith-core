@@ -74,17 +74,17 @@ public class RoadmapCreateService {
                 .findByJobCodeAndVersion(cmd.jobCode(), cmd.profileVersion())
                 .orElseThrow(() -> new JobQueryService.JobProfileNotFoundException(cmd.jobCode()));
 
-        // 2. 기존 ACTIVE 로드맵 아카이브 (D-8)
+        // 2. species 중복 검증 (부작용보다 검증이 먼저)
+        List<String> ownedSpecies = characterRepository.findSpeciesByUserId(userId);
+        if (ownedSpecies.contains(cmd.species())) {
+            throw new DuplicateSpeciesException(cmd.species());
+        }
+
+        // 3. 기존 ACTIVE 로드맵 아카이브 (D-8)
         List<Roadmap> activeRoadmaps = roadmapRepository.findActiveByUserIdAndJobCode(userId, cmd.jobCode());
         for (Roadmap existing : activeRoadmaps) {
             existing.archive();
             roadmapRepository.save(existing);
-        }
-
-        // 3. species 중복 검증
-        List<String> ownedSpecies = characterRepository.findSpeciesByUserId(userId);
-        if (ownedSpecies.contains(cmd.species())) {
-            throw new DuplicateSpeciesException(cmd.species());
         }
 
         // 4. 비정형 입력 존재 여부 판단
@@ -203,9 +203,12 @@ public class RoadmapCreateService {
     public record CreateResult(Long roadmapId, boolean async) {}
 
     public static class DuplicateSpeciesException extends RuntimeException {
+        private final String species;
         public DuplicateSpeciesException(String species) {
-            super("Species already owned: " + species);
+            super("이미 보유한 캐릭터입니다. 다른 알을 선택해주세요.");
+            this.species = species;
         }
+        public String getSpecies() { return species; }
     }
 
     public static class ExperiencesLimitExceededException extends RuntimeException {
