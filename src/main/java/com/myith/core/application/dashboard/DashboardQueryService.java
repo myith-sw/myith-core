@@ -23,17 +23,20 @@ public class DashboardQueryService {
     private final QuestRepository questRepository;
     private final DashboardSnapshotRepository snapshotRepository;
     private final StarRecordRepository starRecordRepository;
+    private final NcsReadRepository ncsReadRepository;
     private final ObjectMapper objectMapper;
 
     public DashboardQueryService(RoadmapRepository roadmapRepository,
                                  QuestRepository questRepository,
                                  DashboardSnapshotRepository snapshotRepository,
                                  StarRecordRepository starRecordRepository,
+                                 NcsReadRepository ncsReadRepository,
                                  ObjectMapper objectMapper) {
         this.roadmapRepository = roadmapRepository;
         this.questRepository = questRepository;
         this.snapshotRepository = snapshotRepository;
         this.starRecordRepository = starRecordRepository;
+        this.ncsReadRepository = ncsReadRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -65,11 +68,17 @@ public class DashboardQueryService {
         List<ExperienceCardDto> experienceCards = new ArrayList<>();
         for (Quest q : quests) {
             if (!q.getStatus().isCompleted()) continue;
-            starRecordRepository.findByQuestId(q.getId()).ifPresent(star ->
+            starRecordRepository.findByQuestId(q.getId()).ifPresent(star -> {
+                    String ncsUnitName = null;
+                    if (q.getNcsUnitCode() != null) {
+                        ncsUnitName = ncsReadRepository.findUnitByCode(q.getNcsUnitCode())
+                                .map(NcsReadRepository.NcsUnitData::name).orElse(null);
+                    }
                     experienceCards.add(new ExperienceCardDto(
-                            q.getId(), q.getTitle(), q.getAxisCode(), q.getNcsUnitCode(),
+                            q.getId(), q.getTitle(), q.getAxisCode(), ncsUnitName,
                             star.getSituation(), star.getTask(), star.getAction(), star.getResult()
-                    )));
+                    ));
+            });
         }
 
         return new DashboardDto(snapshot.completionRate(), snapshot.stage(),

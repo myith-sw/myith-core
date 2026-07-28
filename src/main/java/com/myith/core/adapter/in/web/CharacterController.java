@@ -87,7 +87,7 @@ public class CharacterController {
                 rate, stageNum, stageLabel,
                 c.level(),
                 c.nextQuest() != null ? new NextQuestResponse("qst_" + c.nextQuest().questId(), c.nextQuest().title()) : null,
-                null, null
+                c.createdAt(), c.updatedAt()
             );
         }).toList();
         return ResponseEntity.ok(ApiResponse.of(response));
