@@ -64,9 +64,11 @@ public class AiEnhancementController {
                     - resumeDraft: 자기소개서 초안 영역에 표시합니다.
                     서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /api/quests/{questId}/star로 저장하세요.
 
-                    FAILED 시에도 enhancedStar를 포함합니다. 각 필드에 에러 안내 메시지가 들어갑니다.
-                    프론트는 enhancedStar를 null 체크 없이 항상 렌더링할 수 있습니다.
-                    errorCode 종류: AI_PROVIDER_TIMEOUT(Worker LLM 호출 실패), AI_TIMEOUT(서버 타임아웃 초과), INTERNAL_ERROR(내부 오류)."""
+                    FAILED 시 enhancedStar·feedback·resumeDraft 는 모두 null 입니다.
+                    errorCode 를 보고 프론트에서 안내 문구를 표시하세요.
+                    비교 모달을 열지 말고 토스트나 인라인 메시지로 처리하는 것을 권장합니다.
+                    errorCode 종류: AI_PROVIDER_TIMEOUT(Worker LLM 호출 실패),
+                                  AI_TIMEOUT(서버 대기 60초 초과), INTERNAL_ERROR(내부 오류)."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
             description = "status 필드로 상태를 구분합니다. PROCESSING / COMPLETED / FAILED 세 가지입니다.",

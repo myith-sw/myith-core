@@ -21,7 +21,7 @@ class QuestUnlockPolicyTest {
         return Quest.restore(
                 id, 1L, skillCode, "axis1",
                 level, 0, "Quest " + skillCode,
-                null, null,
+                null, null, null,
                 QuestSource.SKILL, status, null,
                 0, Instant.now(), Instant.now()
         );
@@ -32,7 +32,7 @@ class QuestUnlockPolicyTest {
         return Quest.restore(
                 id, 1L, null, "axis1",
                 level, 0, "Activity Quest " + id,
-                null, null,
+                null, null, null,
                 QuestSource.ACTIVITY, status, null,
                 0, Instant.now(), Instant.now()
         );
@@ -226,7 +226,7 @@ class QuestUnlockPolicyTest {
         Quest q5 = skillQuest(3, "rest", QuestStatus.OPEN);     // Lv3 열려있음
         // Lv2에 CUSTOM 추가 → total 증가, completed < total
         Quest custom = Quest.restore(idSeq++, 1L, null, "axis1",
-                2, 2, "Custom Quest", null, null,
+                2, 2, "Custom Quest", null, null, null,
                 QuestSource.CUSTOM, QuestStatus.OPEN, null, 0, Instant.now(), Instant.now());
 
         var changes = QuestUnlockPolicy.recompute(

@@ -13,6 +13,7 @@ public class Quest {
     private String title;
     private String completionCriteria;  // nullable: 사용자정의
     private String ncsUnitCode;         // nullable: 사용자정의
+    private String guidance;            // nullable: 활동형·옛 프로필
     private QuestSource source;
     private QuestStatus status;
     private Instant completedAt;
@@ -25,7 +26,7 @@ public class Quest {
     public static Quest createSkillQuest(Long roadmapId, String skillCode, String axisCode,
                                          int level, int orderInLevel, String title,
                                          String completionCriteria, String ncsUnitCode,
-                                         QuestStatus status) {
+                                         String guidance, QuestStatus status) {
         Quest q = new Quest();
         q.roadmapId = roadmapId;
         q.skillCode = skillCode;
@@ -35,6 +36,7 @@ public class Quest {
         q.title = title;
         q.completionCriteria = completionCriteria;
         q.ncsUnitCode = ncsUnitCode;
+        q.guidance = guidance;
         q.source = QuestSource.SKILL;
         q.status = status;
         q.version = 0;
@@ -85,7 +87,7 @@ public class Quest {
     // 전체 필드 복원용 (JPA 어댑터에서 사용)
     public static Quest restore(Long id, Long roadmapId, String skillCode, String axisCode,
                                 int level, int orderInLevel, String title,
-                                String completionCriteria, String ncsUnitCode,
+                                String completionCriteria, String ncsUnitCode, String guidance,
                                 QuestSource source, QuestStatus status, Instant completedAt,
                                 long version, Instant createdAt, Instant updatedAt) {
         Quest q = new Quest();
@@ -98,6 +100,7 @@ public class Quest {
         q.title = title;
         q.completionCriteria = completionCriteria;
         q.ncsUnitCode = ncsUnitCode;
+        q.guidance = guidance;
         q.source = source;
         q.status = status;
         q.completedAt = completedAt;
@@ -116,6 +119,7 @@ public class Quest {
     public String getTitle() { return title; }
     public String getCompletionCriteria() { return completionCriteria; }
     public String getNcsUnitCode() { return ncsUnitCode; }
+    public String getGuidance() { return guidance; }
     public QuestSource getSource() { return source; }
     public QuestStatus getStatus() { return status; }
     public Instant getCompletedAt() { return completedAt; }

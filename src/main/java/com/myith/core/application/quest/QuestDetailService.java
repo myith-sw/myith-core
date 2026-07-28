@@ -32,6 +32,7 @@ public class QuestDetailService {
     private final SnapshotService snapshotService;
     private final NcsReadRepository ncsReadRepository;
     private final JobProfileReadRepository jobProfileReadRepository;
+    private final UserQuestGuidanceReadRepository guidanceReadRepository;
     private final DashboardSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
     private final int maxRetries;
@@ -43,6 +44,7 @@ public class QuestDetailService {
                               SnapshotService snapshotService,
                               NcsReadRepository ncsReadRepository,
                               JobProfileReadRepository jobProfileReadRepository,
+                              UserQuestGuidanceReadRepository guidanceReadRepository,
                               DashboardSnapshotRepository snapshotRepository,
                               ObjectMapper objectMapper,
                               @Value("${policy.optimistic-lock.max-retries}") int maxRetries) {
@@ -53,6 +55,7 @@ public class QuestDetailService {
         this.snapshotService = snapshotService;
         this.ncsReadRepository = ncsReadRepository;
         this.jobProfileReadRepository = jobProfileReadRepository;
+        this.guidanceReadRepository = guidanceReadRepository;
         this.snapshotRepository = snapshotRepository;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
@@ -88,11 +91,20 @@ public class QuestDetailService {
         String axisName = resolveAxisName(roadmap.getJobCode(), roadmap.getProfileVersion(), quest.getAxisCode());
         String updatedAt = quest.getUpdatedAt() != null ? quest.getUpdatedAt().toString() : null;
 
+        // 층2 오버레이: user_quest_guidance (D-2 병합 패턴과 동일)
+        String guidance = quest.getGuidance();
+        if (quest.getSkillCode() != null) {
+            Map<String, String> overlay = guidanceReadRepository.findByRoadmapId(quest.getRoadmapId());
+            if (overlay.containsKey(quest.getSkillCode())) {
+                guidance = overlay.get(quest.getSkillCode());
+            }
+        }
+
         return new QuestDetailDto(quest.getId(), quest.getRoadmapId(), quest.getTitle(),
                 quest.getAxisCode(), axisName, quest.getLevel(),
                 quest.getStatus().toApiName(), quest.getSource().name(),
                 quest.getOrderInLevel(), quest.getVersion(),
-                ncsUnit, certifications, quest.getCompletionCriteria(), star, updatedAt);
+                ncsUnit, certifications, quest.getCompletionCriteria(), guidance, star, updatedAt);
     }
 
     /**
@@ -140,7 +152,7 @@ public class QuestDetailService {
         Quest updated = Quest.restore(
                 quest.getId(), quest.getRoadmapId(), quest.getSkillCode(), quest.getAxisCode(),
                 quest.getLevel(), quest.getOrderInLevel(), quest.getTitle(),
-                quest.getCompletionCriteria(), quest.getNcsUnitCode(),
+                quest.getCompletionCriteria(), quest.getNcsUnitCode(), quest.getGuidance(),
                 quest.getSource(), newStatus, completedAt,
                 quest.getVersion(), quest.getCreatedAt(), Instant.now()
         );
@@ -245,7 +257,7 @@ public class QuestDetailService {
 
             Quest changed = Quest.restore(q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                     q.getLevel(), q.getOrderInLevel(), q.getTitle(), q.getCompletionCriteria(),
-                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), q.getCompletedAt(),
+                    q.getNcsUnitCode(), q.getGuidance(), q.getSource(), change.newStatus(), q.getCompletedAt(),
                     q.getVersion(), q.getCreatedAt(), Instant.now());
             questRepository.save(changed);
         }
@@ -353,7 +365,7 @@ public class QuestDetailService {
         if (newStatus != currentStatus) {
             Quest updated = Quest.restore(quest.getId(), quest.getRoadmapId(), quest.getSkillCode(),
                     quest.getAxisCode(), quest.getLevel(), quest.getOrderInLevel(), quest.getTitle(),
-                    quest.getCompletionCriteria(), quest.getNcsUnitCode(), quest.getSource(),
+                    quest.getCompletionCriteria(), quest.getNcsUnitCode(), quest.getGuidance(), quest.getSource(),
                     newStatus, quest.getCompletedAt(), quest.getVersion(),
                     quest.getCreatedAt(), Instant.now());
             questRepository.save(updated);
@@ -410,7 +422,8 @@ public class QuestDetailService {
                                  String axisCode, String axisName, int level,
                                  String status, String source, int order, long version,
                                  NcsUnitDto ncsUnit, List<CertDto> certifications,
-                                 String completionCriteria, StarDto star, String updatedAt) {}
+                                 String completionCriteria, String guidance,
+                                 StarDto star, String updatedAt) {}
     public record NcsUnitDto(String code, String name, String description) {}
     public record CertDto(String name) {}
     public record StarDto(String situation, String task, String action, String result) {}

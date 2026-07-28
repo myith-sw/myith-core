@@ -32,6 +32,8 @@ public class RoadmapCreateService {
     private final GrowthStagePolicy stagePolicy;
     private final AxisAggregator axisAggregator;
     private final BigDecimal alreadyKnownThreshold;
+    private final List<BigDecimal> guidanceTierBoundaries;
+    private final List<String> guidanceTierNames;
     private final int maxExperiences;
 
     public RoadmapCreateService(RoadmapRepository roadmapRepository,
@@ -46,6 +48,8 @@ public class RoadmapCreateService {
                                 GrowthStagePolicy stagePolicy,
                                 AxisAggregator axisAggregator,
                                 @Value("${policy.mastery.already-known-threshold}") BigDecimal alreadyKnownThreshold,
+                                @Value("${policy.guidance.tier-boundaries}") List<BigDecimal> guidanceTierBoundaries,
+                                @Value("${policy.guidance.tier-names}") List<String> guidanceTierNames,
                                 @Value("${policy.roadmap.max-experiences}") int maxExperiences) {
         this.roadmapRepository = roadmapRepository;
         this.characterRepository = characterRepository;
@@ -59,6 +63,8 @@ public class RoadmapCreateService {
         this.stagePolicy = stagePolicy;
         this.axisAggregator = axisAggregator;
         this.alreadyKnownThreshold = alreadyKnownThreshold;
+        this.guidanceTierBoundaries = guidanceTierBoundaries;
+        this.guidanceTierNames = guidanceTierNames;
         this.maxExperiences = maxExperiences;
     }
 
@@ -143,7 +149,7 @@ public class RoadmapCreateService {
 
         List<Quest> quests = RoadmapAssembler.assemble(
                 roadmap.getId(), profileData, selfAssessment, aiParam,
-                alreadyKnownThreshold);
+                alreadyKnownThreshold, guidanceTierBoundaries, guidanceTierNames);
 
         questRepository.saveAll(quests);
 
