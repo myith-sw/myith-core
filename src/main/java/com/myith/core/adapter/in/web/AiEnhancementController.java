@@ -60,6 +60,7 @@ public class AiEnhancementController {
 
                     COMPLETED 시 각 필드 활용법:
                     - enhancedStar: 비교 모달 오른쪽(AI 제안)에 표시합니다. PROCESSING이면 null입니다.
+                      COMPLETED이면서 enhancedStar가 null일 수 있습니다(사실검증 가드). 이때 feedback과 resumeDraft는 정상입니다.
                     - feedback: 항목별 개선 힌트 목록입니다. 빈 배열이면 힌트 섹션을 숨기세요.
                     - resumeDraft: 자기소개서 초안 영역에 표시합니다.
                     서버는 원문을 수정하지 않습니다. 사용자가 '적용'을 누르면 프론트가 textarea를 채운 뒤 PUT /api/quests/{questId}/star로 저장하세요.
@@ -219,7 +220,7 @@ public class AiEnhancementController {
             }
 
             EnhancedStar enhancedStar = null;
-            if (node.has("enhancedStar")) {
+            if (node.has("enhancedStar") && !node.get("enhancedStar").isNull()) {
                 JsonNode es = node.get("enhancedStar");
                 enhancedStar = new EnhancedStar(
                         es.has("situation") ? es.get("situation").asText() : null,
@@ -230,7 +231,7 @@ public class AiEnhancementController {
             }
 
             List<FeedbackEntry> feedback = null;
-            if (node.has("feedback")) {
+            if (node.has("feedback") && !node.get("feedback").isNull()) {
                 feedback = objectMapper.convertValue(node.get("feedback"),
                         objectMapper.getTypeFactory().constructCollectionType(List.class, FeedbackEntry.class));
             }
