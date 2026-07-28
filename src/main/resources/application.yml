@@ -82,6 +82,10 @@ policy:
     master-data-ttl-seconds: ${CACHE_MASTER_TTL:86400}
   mastery:
     already-known-threshold: ${MASTERY_THRESHOLD:0.66}
+  guidance:
+    # M 이하 최대값으로 매핑: M=0→none, M=0.33→aware, M=0.66→experienced, M=1.0→proficient
+    tier-boundaries: [0.0, 0.33, 0.66, 1.0]
+    tier-names: ["none", "aware", "experienced", "proficient"]
   optimistic-lock:
     max-retries: ${LOCK_MAX_RETRIES:3}
   outbox:

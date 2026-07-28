@@ -39,6 +39,9 @@ public class QuestJpaEntity {
     @Column(name = "ncs_unit_code")
     private String ncsUnitCode;
 
+    @Column(name = "guidance")
+    private String guidance;
+
     @Column(name = "source", nullable = false)
     private String source;
 
@@ -74,6 +77,7 @@ public class QuestJpaEntity {
         entity.title = quest.getTitle();
         entity.completionCriteria = quest.getCompletionCriteria();
         entity.ncsUnitCode = quest.getNcsUnitCode();
+        entity.guidance = quest.getGuidance();
         entity.source = quest.getSource().name();
         entity.status = quest.getStatus().name();
         entity.completedAt = quest.getCompletedAt();
@@ -87,7 +91,7 @@ public class QuestJpaEntity {
         return Quest.restore(
                 id, roadmapId, skillCode, axisCode,
                 level, orderInLevel, title,
-                completionCriteria, ncsUnitCode,
+                completionCriteria, ncsUnitCode, guidance,
                 QuestSource.valueOf(source),
                 QuestStatus.valueOf(status),
                 completedAt, version, createdAt, updatedAt

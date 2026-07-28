@@ -23,7 +23,7 @@ public class SharedSchemaCheckRunner implements ApplicationRunner {
 
     private static final List<String> SHARED_TABLES = List.of(
             "job", "job_profile", "ncs_unit", "ncs_certification",
-            "skill_ncs_map", "user_competency"
+            "skill_ncs_map", "user_competency", "user_quest_guidance"
     );
 
     private final JdbcTemplate jdbcTemplate;

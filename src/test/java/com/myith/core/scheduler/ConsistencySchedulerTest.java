@@ -41,7 +41,10 @@ class ConsistencySchedulerTest {
                 roadmapRepo, null, null, new StubDiagnosisRepository(),
                 null, null, profileRepo, null,
                 new ObjectMapper(), null, null,
-                BigDecimal.valueOf(0.66), 3) {
+                BigDecimal.valueOf(0.66),
+                List.of(BigDecimal.ZERO, BigDecimal.valueOf(0.33), BigDecimal.valueOf(0.66), BigDecimal.ONE),
+                List.of("none", "aware", "experienced", "proficient"),
+                3) {
             @Override
             public void assembleAndSnapshot(Roadmap roadmap, JobProfileData profile,
                                             List<AnswerDto> answers) {

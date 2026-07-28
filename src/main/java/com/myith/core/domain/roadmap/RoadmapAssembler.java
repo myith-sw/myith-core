@@ -22,7 +22,9 @@ public class RoadmapAssembler {
                                        ProfileData profile,
                                        Map<String, BigDecimal> selfAssessment,
                                        Map<String, CompetencyEntry> aiAssessment,
-                                       BigDecimal alreadyKnownThreshold) {
+                                       BigDecimal alreadyKnownThreshold,
+                                       List<BigDecimal> guidanceTierBoundaries,
+                                       List<String> guidanceTierNames) {
         // 1. 위상정렬로 선후관계 검증 (순환 감지)
         List<String> topoOrder = topologicalSort(profile.skills(), profile.prerequisites());
 
@@ -51,6 +53,10 @@ public class RoadmapAssembler {
 
                 QuestStatus status = determineInitialStatus(sp.mastery, alreadyKnownThreshold);
 
+                // guidance 선택: 템플릿에 guidance map이 있으면 M값에 맞는 tier 문구를 고른다
+                String guidance = selectGuidance(template, sp.mastery,
+                        guidanceTierBoundaries, guidanceTierNames);
+
                 quests.add(Quest.createSkillQuest(
                         roadmapId,
                         sp.skill.skillCode(),
@@ -60,6 +66,7 @@ public class RoadmapAssembler {
                         template != null ? template.title() : sp.skill.skillName(),
                         template != null ? template.completionCriteria() : null,
                         template != null ? template.ncsUnitCode() : null,
+                        guidance,
                         status
                 ));
             }
@@ -138,7 +145,7 @@ public class RoadmapAssembler {
                 Quest locked = Quest.restore(
                         q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                         q.getLevel(), q.getOrderInLevel(), q.getTitle(),
-                        q.getCompletionCriteria(), q.getNcsUnitCode(),
+                        q.getCompletionCriteria(), q.getNcsUnitCode(), q.getGuidance(),
                         q.getSource(), QuestStatus.LOCKED, q.getCompletedAt(),
                         q.getVersion(), q.getCreatedAt(), q.getUpdatedAt()
                 );
@@ -188,6 +195,26 @@ public class RoadmapAssembler {
         return sorted;
     }
 
+    /**
+     * M값에 맞는 guidance tier를 선택한다.
+     * 이하 최대값(floor) 매핑: boundaries=[0, 0.33, 0.66, 1.0] 일 때 M=0.5 → aware(0.33)
+     */
+    static String selectGuidance(QuestTemplate template, BigDecimal mastery,
+                                  List<BigDecimal> boundaries, List<String> tierNames) {
+        if (template == null || template.guidance() == null || template.guidance().isEmpty()) {
+            return null;
+        }
+        // 이하 최대값(floor) 매핑
+        String selectedTier = tierNames.get(0);
+        for (int i = 0; i < boundaries.size(); i++) {
+            if (mastery.compareTo(boundaries.get(i)) >= 0) {
+                selectedTier = tierNames.get(i);
+            }
+        }
+        String text = template.guidance().get(selectedTier);
+        return (text != null && !text.isBlank()) ? text : null;
+    }
+
     private static int countQuestsInLevel(List<Quest> quests, int level) {
         return (int) quests.stream().filter(q -> q.getLevel() == level).count();
     }
@@ -210,7 +237,8 @@ public class RoadmapAssembler {
 
     public record Prerequisite(String from, String to) {}
 
-    public record QuestTemplate(String skillCode, String title, String completionCriteria, String ncsUnitCode) {}
+    public record QuestTemplate(String skillCode, String title, String completionCriteria, String ncsUnitCode,
+                                    Map<String, String> guidance) {}
 
     public record ActivityQuestData(String axisCode, int level, String title, String completionCriteria) {}
 

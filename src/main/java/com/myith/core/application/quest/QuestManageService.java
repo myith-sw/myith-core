@@ -87,7 +87,7 @@ public class QuestManageService {
         Quest moved = Quest.restore(
                 target.getId(), target.getRoadmapId(), target.getSkillCode(), target.getAxisCode(),
                 targetLevel, targetIndex, target.getTitle(), target.getCompletionCriteria(),
-                target.getNcsUnitCode(), target.getSource(), target.getStatus(),
+                target.getNcsUnitCode(), target.getGuidance(), target.getSource(), target.getStatus(),
                 target.getCompletedAt(), target.getVersion(), target.getCreatedAt(), target.getUpdatedAt()
         );
 
@@ -100,7 +100,7 @@ public class QuestManageService {
             Quest updated = Quest.restore(
                     q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                     targetLevel, i, q.getTitle(), q.getCompletionCriteria(),
-                    q.getNcsUnitCode(), q.getSource(), q.getStatus(),
+                    q.getNcsUnitCode(), q.getGuidance(), q.getSource(), q.getStatus(),
                     q.getCompletedAt(), q.getVersion(), q.getCreatedAt(), q.getUpdatedAt()
             );
             questRepository.save(updated);
@@ -185,7 +185,7 @@ public class QuestManageService {
 
             Quest changed = Quest.restore(q.getId(), q.getRoadmapId(), q.getSkillCode(), q.getAxisCode(),
                     q.getLevel(), q.getOrderInLevel(), q.getTitle(), q.getCompletionCriteria(),
-                    q.getNcsUnitCode(), q.getSource(), change.newStatus(), q.getCompletedAt(),
+                    q.getNcsUnitCode(), q.getGuidance(), q.getSource(), change.newStatus(), q.getCompletedAt(),
                     q.getVersion(), q.getCreatedAt(), Instant.now());
             questRepository.save(changed);
         }

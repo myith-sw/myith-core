@@ -40,8 +40,7 @@ public class QuestController {
                     화면 4-2(퀘스트 상세 + STAR)에서 호출합니다.
                     ncsUnit은 source가 CUSTOM이면 null입니다. null인 경우 'NCS 근거' 섹션 자체를 숨기세요.
                     certifications는 연계 자격 전체를 반환합니다. 빈 배열이면 '해당 없음'을 표시하세요.
-                    star가 null이면 STAR 입력칸을 빈 값으로 초기화하세요.
-                    version 필드는 낙관적 락 토큰으로, PATCH /complete 호출 시 그대로 전달해야 합니다."""
+                    star가 null이면 STAR 입력칸을 빈 값으로 초기화하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
             content = @Content(mediaType = "application/json",
@@ -81,7 +80,7 @@ public class QuestController {
                 "qst_" + dto.questId(), "rmp_" + dto.roadmapId(), dto.level(),
                 dto.axisCode(), dto.axisName(), dto.title(), dto.status(), dto.source(),
                 dto.order(), dto.version(),
-                dto.completionCriteria(),
+                dto.completionCriteria(), dto.guidance(),
                 dto.ncsUnit() != null
                         ? new NcsUnitResponse(dto.ncsUnit().code(), dto.ncsUnit().name(), dto.ncsUnit().description())
                         : null,
@@ -163,13 +162,9 @@ public class QuestController {
             description = """
                     퀘스트 완료 상태를 토글합니다.
                     ★ star 를 함께 보내면 STAR 저장과 완료가 한 트랜잭션에서 처리됩니다.
-                      PUT /api/quests/{id}/star 를 먼저 호출한 뒤 완료를 호출하면
-                      저장이 version 을 올려 409 VERSION_CONFLICT 가 발생할 수 있습니다.
-                      "작성 후 완료" UI 라면 star 를 포함한 이 요청 한 번만 보내세요.
-                    star 를 생략하면 완료 토글만 수행합니다(기존 동작).
+                    star 를 생략하면 완료 토글만 수행합니다.
                     응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
                     unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
-                    409 VERSION_CONFLICT 수신 시, 퀘스트 상세를 재조회한 뒤 새 version 값으로 재시도하세요.
                     completed: false를 보내면 완료 취소(DONE → OPEN)가 처리됩니다.""",
             parameters = @Parameter(name = "Idempotency-Key", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER,
                     description = "멱등성 키 (optional)", required = false,
@@ -208,26 +203,16 @@ public class QuestController {
                                         ]
                                       }
                                     }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "VERSION_CONFLICT / QUEST_LOCKED",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED — 잠긴 퀘스트에 완료 시도",
                     content = @Content(mediaType = "application/json",
-                            examples = {
-                                    @ExampleObject(name = "VERSION_CONFLICT", value = """
-                                            {
-                                              "error": {
-                                                "code": "VERSION_CONFLICT",
-                                                "message": "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.",
-                                                "requestId": "req_01J3ABC"
-                                              }
-                                            }"""),
-                                    @ExampleObject(name = "QUEST_LOCKED", value = """
-                                            {
-                                              "error": {
-                                                "code": "QUEST_LOCKED",
-                                                "message": "선행 퀘스트를 먼저 완료해주세요.",
-                                                "requestId": "req_01J3ABC"
-                                              }
-                                            }""")
-                            }))
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "error": {
+                                        "code": "QUEST_LOCKED",
+                                        "message": "선행 퀘스트를 먼저 완료해주세요.",
+                                        "requestId": "req_01J3ABC"
+                                      }
+                                    }""")))
     })
     @PatchMapping("/{questId}/complete")
     public ResponseEntity<ApiResponse<CompleteResponse>> toggleComplete(
@@ -373,8 +358,15 @@ public class QuestController {
                     CUSTOM: 사용자 정의 퀘스트(삭제 가능, NCS 연계 없음).""", example = "ACTIVITY",
                     allowableValues = {"SKILL", "ACTIVITY", "CUSTOM"}) String source,
             @Schema(description = "레벨 내 순서", example = "1") int order,
-            @Schema(description = "낙관적 락 버전. PATCH /complete 호출 시 그대로 전달해야 합니다", example = "0") long version,
+            @Schema(description = "내부 버전 (참고용)", example = "0") long version,
             @Schema(description = "화면 4-2 '완료 기준' 박스에 표시합니다. CUSTOM 퀘스트는 null일 수 있으며, null이면 섹션을 숨기세요.", nullable = true, example = "네트워크·OS·DB 핵심 답안을 정리한다") String completionCriteria,
+            @Schema(description = """
+                    자가진단 수준에 맞춘 안내 문구입니다. 퀘스트 상세의 설명 영역에 표시하세요.
+                    서술형을 입력한 사용자는 AI가 맥락을 반영해 다듬은 문구가 내려옵니다.
+                    null 일 수 있습니다(활동형 퀘스트, 또는 guidance 가 없는 옛 프로필 버전).
+                    null 이면 해당 영역을 숨기세요.""",
+                    nullable = true,
+                    example = "Git 형상관리이(가) 처음이라면 기본 개념부터 차근히 익혀보세요.") String guidance,
             @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스에 표시합니다. source가 CUSTOM이면 null이므로 섹션 자체를 숨기세요", nullable = true) NcsUnitResponse ncsUnit,
             @Schema(description = "화면 4-2 '추천 자격' 목록입니다. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
             @Schema(description = "화면 4-2 STAR 입력칸 4개의 초기값입니다. null이면 빈 값으로 초기화하세요", nullable = true) StarResponse star,
@@ -433,11 +425,7 @@ public class QuestController {
                     ■ DONE 유지: 완료된 퀘스트의 STAR를 수정해도 상태는 바뀌지 않음.
                     ■ ALREADY_KNOWN 유지: 이미 보유 역량의 STAR를 작성해도 상태는 바뀌지 않음.""", example = "OPEN",
                     allowableValues = {"LOCKED", "OPEN", "DONE", "ALREADY_KNOWN"}) String status,
-            @Schema(description = """
-                    저장 후의 낙관적 락 버전입니다.
-                    이어서 PATCH /api/quests/{id}/complete 를 호출한다면 이 값을 그대로 사용하세요.
-                    요청 시점의 옛 version 을 쓰면 409 VERSION_CONFLICT 가 발생합니다.""",
-                    example = "4") long version,
+            @Schema(description = "저장 후의 내부 버전 (참고용)", example = "4") long version,
             @Schema(description = "수정 시각", example = "2026-07-24T03:10:00Z") String updatedAt
     ) {}
 
@@ -453,8 +441,7 @@ public class QuestController {
     @Schema(name = "CompleteResponse")
     record CompleteResponse(
             @Schema(description = """
-                    완료 처리된 퀘스트 정보입니다. quest.status로 UI 상태를 즉시 갱신하고, \
-                    quest.version을 로컬에 저장해 다음 요청에 사용하세요.""") CompletedQuestInfo quest,
+                    완료 처리된 퀘스트 정보입니다. quest.status로 UI 상태를 즉시 갱신하세요.""") CompletedQuestInfo quest,
             @Schema(description = """
                     완료에 따른 캐릭터 변화 정보입니다. completionRate로 진행바를 갱신하고, \
                     stage/stageLabel로 캐릭터 이미지({species}-{stage}.png)를 교체하세요. \

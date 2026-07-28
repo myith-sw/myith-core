@@ -157,7 +157,6 @@ public class RoadmapController {
                     레벨 개수는 직무마다 4~7개로 다릅니다. 구분선에는 "Lv.{level}" 형태로 표시하면 됩니다.
                     LOCKED 상태인 퀘스트도 목록에 포함됩니다. 자물쇠 UI로 표시하고 상세 진입을 막으세요.
                     ALREADY_KNOWN 퀘스트는 접힌 상태로 표시하되 STAR 기록 진입은 허용합니다.
-                    version은 낙관적 락용 값입니다. 각 퀘스트의 version을 보관했다가 완료 토글·순서변경 요청에 그대로 포함해야 합니다.
                     generationState가 ANALYZING이면 아직 생성 중이므로 SSE로 완료를 기다린 후 이 API를 호출하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
@@ -230,7 +229,8 @@ public class RoadmapController {
                         l.quests().stream().map(q -> new RoadmapQuestResponse(
                                 "qst_" + q.questId(), q.title(),
                                 q.axisCode(), q.axisName(),
-                                q.status(), q.source(), q.order(), q.version()
+                                q.status(), q.source(), q.order(), q.version(),
+                                q.guidance()
                         )).toList()
                 )).toList(),
                 dto.updatedAt()
@@ -292,7 +292,8 @@ public class RoadmapController {
                         "qst_" + quest.getId(), quest.getTitle(),
                         quest.getAxisCode(), axisName,
                         quest.getLevel(), "OPEN", "CUSTOM",
-                        quest.getOrderInLevel(), quest.getVersion()
+                        quest.getOrderInLevel(), quest.getVersion(),
+                        null  // CUSTOM 퀘스트는 guidance 없음
                 )));
     }
 
@@ -302,8 +303,6 @@ public class RoadmapController {
             summary = "퀘스트 순서 변경",
             description = """
                     화면 4-1 드래그&드롭으로 퀘스트 순서를 변경할 때 호출합니다.
-                    version은 낙관적 락용입니다. GET /api/roadmaps/{roadmapId} 응답의 quest.version 값을 그대로 보내야 합니다.
-                    409 VERSION_CONFLICT가 반환되면 로드맵 상세를 다시 조회한 뒤 재시도하세요.
                     성공 시 갱신된 전체 레벨·퀘스트 목록을 반환하므로 별도 재조회 없이 UI를 업데이트할 수 있습니다."""
     )
     @ApiResponses({
@@ -341,16 +340,6 @@ public class RoadmapController {
                                         ]
                                       }
                                     }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "VERSION_CONFLICT — 낙관적 락 실패",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = """
-                                    {
-                                      "error": {
-                                        "code": "VERSION_CONFLICT",
-                                        "message": "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.",
-                                        "requestId": "req_01J3ABC"
-                                      }
-                                    }""")))
     })
     @PatchMapping("/{roadmapId}/quests/order")
     public ResponseEntity<ApiResponse<ReorderResponse>> reorderQuest(
@@ -367,7 +356,8 @@ public class RoadmapController {
                 l.quests().stream().map(q -> new RoadmapQuestResponse(
                         "qst_" + q.questId(), q.title(),
                         q.axisCode(), q.axisName(),
-                        q.status(), q.source(), q.order(), q.version()
+                        q.status(), q.source(), q.order(), q.version(),
+                        q.guidance()
                 )).toList()
         )).toList();
         return ResponseEntity.ok(ApiResponse.of(new ReorderResponse(levels)));
@@ -546,8 +536,16 @@ public class RoadmapController {
             String source,
             @Schema(description = "레벨 내 정렬 순서입니다.", example = "1")
             int order,
-            @Schema(description = "낙관적 락 버전입니다. 완료 토글(PATCH /api/quests/{id}/complete)·순서변경(PATCH /api/roadmaps/{id}/quests/order) 요청에 그대로 포함해야 합니다.", example = "3")
-            long version
+            @Schema(description = "내부 버전 (참고용)", example = "3")
+            long version,
+            @Schema(description = """
+                    자가진단 수준에 맞춘 안내 문구입니다. 퀘스트 상세의 설명 영역에 표시하세요.
+                    서술형을 입력한 사용자는 AI가 맥락을 반영해 다듬은 문구가 내려옵니다.
+                    null 일 수 있습니다(활동형 퀘스트, 또는 guidance 가 없는 옛 프로필 버전).
+                    null 이면 해당 영역을 숨기세요.""",
+                    nullable = true,
+                    example = "Git 형상관리이(가) 처음이라면 기본 개념부터 차근히 익혀보세요.")
+            String guidance
     ) {}
 
     @Schema(name = "AddQuestRequest")
@@ -588,7 +586,9 @@ public class RoadmapController {
             @Schema(description = "레벨 내 정렬 순서입니다. 해당 레벨의 마지막 순서로 추가됩니다.", example = "4")
             int order,
             @Schema(description = "낙관적 락 버전입니다. 생성 직후에는 항상 0입니다.", example = "0")
-            long version
+            long version,
+            @Schema(description = "안내 문구. CUSTOM 퀘스트는 항상 null", nullable = true)
+            String guidance
     ) {}
 
     @Schema(name = "ReorderRequest")
@@ -598,9 +598,7 @@ public class RoadmapController {
             @Schema(description = "이동 대상 레벨입니다. 레벨 간 이동도 가능합니다.", example = "1")
             @NotNull Integer targetLevel,
             @Schema(description = "이동 대상 위치의 인덱스입니다(0부터 시작). 드래그 결과의 목적지 index를 전달합니다.", example = "0")
-            @NotNull Integer targetIndex,
-            @Schema(description = "낙관적 락 버전입니다. GET /api/roadmaps/{roadmapId} 응답의 해당 quest.version 값을 사용합니다.", example = "3")
-            @NotNull Long version
+            @NotNull Integer targetIndex
     ) {}
 
     @Schema(name = "ReorderResponse")

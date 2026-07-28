@@ -9,6 +9,7 @@ import com.myith.core.application.port.JobReadRepository.JobData;
 import com.myith.core.domain.character.Character;
 import com.myith.core.domain.dashboard.GrowthStagePolicy;
 import com.myith.core.domain.roadmap.Quest;
+import com.myith.core.domain.roadmap.QuestStatus;
 import com.myith.core.domain.roadmap.Roadmap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class RoadmapQueryService {
     private final JobReadRepository jobRepository;
     private final JobProfileReadRepository jobProfileRepository;
     private final GrowthStagePolicy stagePolicy;
+    private final UserQuestGuidanceReadRepository guidanceReadRepository;
     private final ObjectMapper objectMapper;
 
     public RoadmapQueryService(RoadmapRepository roadmapRepository,
@@ -37,6 +39,7 @@ public class RoadmapQueryService {
                                JobReadRepository jobRepository,
                                JobProfileReadRepository jobProfileRepository,
                                GrowthStagePolicy stagePolicy,
+                               UserQuestGuidanceReadRepository guidanceReadRepository,
                                ObjectMapper objectMapper) {
         this.roadmapRepository = roadmapRepository;
         this.characterRepository = characterRepository;
@@ -45,6 +48,7 @@ public class RoadmapQueryService {
         this.jobRepository = jobRepository;
         this.jobProfileRepository = jobProfileRepository;
         this.stagePolicy = stagePolicy;
+        this.guidanceReadRepository = guidanceReadRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -66,6 +70,9 @@ public class RoadmapQueryService {
         // axisCode → axisName 매핑 (job_profile에서)
         Map<String, String> axisNameMap = buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
 
+        // 층2 오버레이: user_quest_guidance (D-2 병합 패턴과 동일)
+        Map<String, String> guidanceOverlay = guidanceReadRepository.findByRoadmapId(roadmapId);
+
         // 레벨별 그룹핑
         Map<Integer, List<QuestDto>> byLevel = quests.stream()
                 .sorted(Comparator.comparingInt(Quest::getLevel).thenComparingInt(Quest::getOrderInLevel))
@@ -75,7 +82,10 @@ public class RoadmapQueryService {
                                 q.getAxisCode(),
                                 axisNameMap.getOrDefault(q.getAxisCode(), q.getAxisCode()),
                                 q.getStatus().toApiName(), q.getSource().name(),
-                                q.getOrderInLevel(), q.getVersion()
+                                q.getOrderInLevel(), q.getVersion(),
+                                q.getSkillCode() != null && guidanceOverlay.containsKey(q.getSkillCode())
+                                        ? guidanceOverlay.get(q.getSkillCode())
+                                        : q.getGuidance()
                         ), Collectors.toList())));
 
         List<LevelDto> levels = byLevel.entrySet().stream()
@@ -127,13 +137,14 @@ public class RoadmapQueryService {
             // 다음 퀘스트: OPEN 상태 중 가장 낮은 레벨·순서
             List<Quest> quests = questRepository.findByRoadmapId(roadmap.getId());
             Quest nextQuest = quests.stream()
-                    .filter(q -> q.getStatus().name().equals("OPEN"))
+                    .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.PENDING)
                     .min(Comparator.comparingInt(Quest::getLevel).thenComparingInt(Quest::getOrderInLevel))
                     .orElse(null);
 
             // 현재 최고 레벨 (진행 중인 레벨)
             int currentLevel = quests.stream()
-                    .filter(q -> q.getStatus().name().equals("OPEN") || q.getStatus().name().equals("DONE"))
+                    .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.PENDING
+                            || q.getStatus() == QuestStatus.DONE)
                     .mapToInt(Quest::getLevel)
                     .max().orElse(1);
 
@@ -223,7 +234,8 @@ public class RoadmapQueryService {
                                BigDecimal completionRate) {}
     public record LevelDto(int level, List<QuestDto> quests) {}
     public record QuestDto(Long questId, String title, String axisCode, String axisName,
-                           String status, String source, int order, long version) {}
+                           String status, String source, int order, long version,
+                           String guidance) {}
 
     public record CharacterListDto(Long characterId, Long roadmapId, String species, String nickname,
                                    String jobCode, String jobName, String tagline,
