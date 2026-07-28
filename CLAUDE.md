@@ -76,7 +76,8 @@ com.myith.core
 **C-2.** Core는 파일을 처리하지 않는다. 파일 키(문자열)만 다룬다. S3 Presigned URL 발급, fileKey 전달이 전부다.
 
 **C-3.** Core는 Worker 소유 테이블에 쓰지 않는다.
-- 읽기 전용: `job_profile`, `user_competency`, `ncs_unit`, `ncs_certification`, `job`, `skill_ncs_map`
+- 읽기 전용: `job_profile`, `user_competency`, `ncs_unit`, `ncs_certification`, `job`, `skill_ncs_map`, `user_quest_guidance`
+  - `user_quest_guidance` — 층2 문구 개인화 결과. Worker Alembic 0006 소유. Core Flyway에 DDL을 만들지 않는다.
 - 소유·쓰기: `users`, `character`, `roadmap`, `quest`, `user_diagnosis`, `star_record`, `dashboard_snapshot`, `outbox`, `processed_event`
 - **Worker 소유 테이블의 DDL은 Worker Alembic에 있다. Core Flyway에 만들지 않는다.**
 
@@ -112,6 +113,29 @@ user_competency  (Worker 소유) — AI 보정 + evidence
   둘 다 없으면 → 0
 ```
 
+## D-2b. 퀘스트 안내 문구도 2층이고, 조립 시 병합한다
+
+```
+층1  job_profile.quest_templates[].guidance   (Worker 시드)  — 자가진단 수준별 4종
+층2  user_quest_guidance                       (Worker 소유)  — narrative 반영해 다듬은 문구
+
+최종 guidance:
+  user_quest_guidance 에 (roadmap_id, skill_code) 가 있고 guidance 가 비어있지 않으면 → 그 값
+  아니면 → 층1 에서 M 값으로 고른 4종 중 하나
+  둘 다 없으면 → null (프론트가 영역을 숨긴다)
+```
+
+층1 선택은 M 값 **이하 최대값(floor)** 매핑이다.
+경계값은 `policy.guidance.tier-boundaries` 에 있다. 하드코딩하지 않는다(C-6).
+
+  M = 0.00 → none · 0.33 → aware · 0.66 → experienced · 1.00 → proficient
+
+**층1만으로도 LLM 호출 0회로 개인화 문구가 나온다.** 층2는 서술형을 쓴 사용자에게만
+적용되고, Worker LLM 실패 시 층1 문구가 그대로 저장되므로 화면은 항상 채워진다.
+
+활동형 퀘스트(`skillCode == null`)는 대상이 아니다. `guidance = null`.
+`guidance` 가 없는 옛 프로필 버전도 null 로 두고 예외를 던지지 않는다(D-8).
+
 ## D-3. ALREADY_KNOWN은 완료로 집계한다
 
 ```
@@ -137,6 +161,8 @@ M ≥ 0.66 → `ALREADY_KNOWN`. 로드맵에 남되 접힌 상태, STAR 기록 �
 | 사용자정의 | null | 있음 | CUSTOM |
 
 `quest.skill_code`는 nullable. 활동형도 완료율·레이더에 정상 집계된다.
+
+`quest.guidance`는 자가진단 수준에 맞춘 안내 문구(D-2b). 스킬형만 값이 있고, 활동형·사용자정의는 null.
 
 ## D-6. Priority는 레벨 내부에서만 정렬한다
 
@@ -198,6 +224,7 @@ Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)�
 - 재잠금: Lv N에 미완료가 생기면 Lv N+1의 미완료 퀘스트를 LOCKED로 되돌린다. DONE/ALREADY_KNOWN은 건드리지 않는다.
 - 재계산 시점: ① 초기 조립 ② 완료 토글 ③ 퀘스트 추가·삭제 ④ 순서 변경
 - 구현: `QuestUnlockPolicy.recompute()` (순수 도메인 함수)
+- **해금은 단조다** — 이미 OPEN인 퀘스트를 LOCKED로 되돌리지 않는다. 퀘스트 추가·삭제·완료취소 시 레벨 total이 변해 상위 레벨이 재잠금되던 문제를 막는다.
 
 ## D-15. QuestStatus 상태 전이
 
@@ -211,6 +238,34 @@ DONE    --(완료 false)--> STAR 있으면 PENDING, 없으면 OPEN
 
 PENDING은 isCompleted()에 포함되지 않는다. 완료율·레이더에 영향 없음.
 PENDING은 "STAR를 썼지만 완료 처리 안 함"이다. AI 피드백 대기와 무관하다.
+
+## D-16. PENDING은 DB 전용 상태다
+
+| | DB | API 응답 |
+|---|---|---|
+| 값 | LOCKED · OPEN · **PENDING** · DONE · ALREADY_KNOWN | LOCKED · OPEN · DONE · ALREADY_KNOWN |
+
+`QuestStatus.toApiName()`이 PENDING → OPEN으로 매핑한다.
+DB에는 유지해 STAR 임시저장 여부를 추적한다(D-15 결정은 그대로 유효).
+
+**enum에서 PENDING을 지우지 마라.** 프론트 분기를 줄이려고 표현 계층에서만 감춘 것이다.
+서비스 레이어에서 상태를 응답에 실을 때는 반드시 `toApiName()`을 거친다.
+`.getStatus().name()`을 API 응답 경로에 쓰지 않는다.
+
+**필터링에는 PENDING을 포함해야 한다.** "다음 퀘스트"·"현재 레벨" 계산에서 PENDING을
+빠뜨리면 STAR 작성 중인 퀘스트가 사라진다(실제로 한 번 발생했다).
+
+## D-17. 퀘스트 완료 토글은 version을 받지 않는다
+
+`PATCH /api/quests/{id}/complete` 요청에 `version`이 없다.
+STAR 저장이 version을 올려 동시 호출 시 409가 나던 문제 때문에 제거했다.
+대신 `star`를 optional로 받아 **한 트랜잭션에서 저장 + 완료**를 처리한다.
+
+JPA `@Version`은 그대로 살아 있고 `ObjectOptimisticLockingFailureException`도 계속 잡는다.
+없앤 것은 **애플리케이션 레벨의 명시적 version 비교**뿐이다.
+
+Swagger에서 `PATCH .../complete`의 409는 `QUEST_LOCKED`만 남는다.
+응답의 `version`은 참고용이며 "다음 요청에 쓰라"고 안내하지 않는다.
 
 ---
 
@@ -230,7 +285,7 @@ character (id, user_id FK, roadmap_id FK UNIQUE, species, nickname NULL,
            created_at, updated_at, deleted_at)
 
 quest (id, roadmap_id FK, skill_code NULL, axis_code, level, order_in_level,
-       title, completion_criteria NULL, ncs_unit_code NULL,
+       title, completion_criteria NULL, ncs_unit_code NULL, guidance TEXT NULL,
        source, status, completed_at NULL, version, created_at, updated_at, deleted_at)
 
 user_diagnosis (id, roadmap_id FK, skill_code, mastery NUMERIC(3,2), created_at)
@@ -264,6 +319,9 @@ ncs_unit (code PK, name, description, level)
 ncs_certification (ncs_unit_code FK, cert_code, cert_name, unit_type)
 
 skill_ncs_map (skill_code, ncs_unit_code)
+
+user_quest_guidance (roadmap_id + skill_code PK, guidance TEXT, tier VARCHAR,
+                     created_at)
 -- DDL은 Worker Alembic이 소유한다. Core Flyway에 만들지 않는다.
 ```
 
@@ -327,6 +385,7 @@ POST /api/roadmaps
   }
 → 200 { roadmapId }   // 선택형만 → 즉시 조립
 → 202 { roadmapId }   // 비정형(narrative 또는 experiences 존재) → 비동기, 정합성 스케줄러가 폴백(D-13)
+→ 409 SPECIES_ALREADY_OWNED  // 같은 species로 활성 캐릭터가 이미 있을 때
 
 GET /api/roadmaps/{id}/progress  (SSE)
 → event: progress { step, percent } / done { roadmapId } / error { code, message }
@@ -338,7 +397,8 @@ GET /api/roadmaps/{id}/progress  (SSE)
 GET /api/roadmaps/{id}
 → { roadmapId, jobName, tagline, generationState,
     character: { species, nickname, stage, completionRate },
-    levels: [{ level, quests:[{ questId, title, axisName, status, source }] }] }
+    levels: [{ level, quests:[{ questId, title, axisName, status, source, guidance? }] }] }
+    status 값: LOCKED / OPEN / DONE / ALREADY_KNOWN  (PENDING은 API에 노출하지 않는다 D-16)
 
 PATCH  /api/roadmaps/{id}/quests/order  { questId, targetLevel, targetIndex }
 POST   /api/roadmaps/{id}/quests        { title, axisCode, level }
@@ -349,16 +409,20 @@ DELETE /api/roadmaps/{id}/quests/{qid}  -- CUSTOM만
 
 ```
 GET   /api/quests/{id}
-→ { questId, title, axisName, level, status,
+→ { questId, title, axisName, level, status, guidance?,
     ncsUnit:{ code, name, description }|null, certifications:[{ name }],
     completionCriteria, star:{ situation, task, action, result }|null }
 
-PATCH /api/quests/{id}/complete    { completed, version }
+PATCH /api/quests/{id}/complete    { completed, star? }  ← version 제거(D-17)
 PUT   /api/quests/{id}/star        { situation, task, action, result }
+                                   → { status, version }
 POST  /api/quests/{id}/ai-enhancements   → 202 { requestId }
 GET   /api/ai-enhancements/{reqId}       → { status, enhancedStar?, feedback[], resumeDraft? }
+                                           FAILED 시 enhancedStar·feedback·resumeDraft는 null.
+                                           errorCode로만 판단한다.
 ```
 
+퀘스트 status 값: LOCKED / OPEN / DONE / ALREADY_KNOWN (PENDING은 API에 노출하지 않는다 D-16).
 완료 토글 시 dashboard_snapshot 재계산. AI 보완은 Outbox 발행, 결과는 저장하지 않음.
 
 ## F-9. 대시보드 · 내보내기
@@ -548,18 +612,18 @@ Worker 작업을 만나면: (1) 멈추고 (2) `docs/handoff-to-worker.md`에 기
 # PART L. 구현 순서
 
 ```
- 1. 프로젝트 셋업  (완료)
- 2. 인증 — 구글 로그인·JWT, 활동 갱신 인터셉터
- 3. 조회 API — 직무 목록, 자가진단 문항 + 시드 데이터
- 4. 로드맵 생성 — 트랜잭션 조립(선택형 경로), user_diagnosis, 레벨 해금(QuestUnlockPolicy)
- 5. 로드맵 조회 — 상세, 퀘스트 순서·추가·삭제
- 6. 퀘스트·STAR — 완료 토글(낙관적 락, 레벨 재계산), STAR CRUD, AI 보완, 커서 페이지네이션
- 7. 대시보드 — CQRS 스냅샷, 레이더 완료율
- 8. 내보내기 — MD, PDF(한글 폰트)
- 9. 메시징 — Outbox 릴레이, fanout 컨슈머, SSE
-10. 비동기 경로 — 202, SSE 진행률, 정합성 스케줄러
-11. 앱 연동 — S3 Presigned, heartbeat, 48h 스케줄러
-12. 마무리 — 캐시, 테스트, Dockerfile
+ 1. 프로젝트 셋업                                              (완료)
+ 2. 인증 — 구글 로그인·JWT, 활동 갱신 인터셉터                   (완료)
+ 3. 조회 API — 직무 목록, 자가진단 문항 + 시드 데이터              (완료)
+ 4. 로드맵 생성 — 트랜잭션 조립(선택형 경로), user_diagnosis, 해금  (완료)
+ 5. 로드맵 조회 — 상세, 퀘스트 순서·추가·삭제                      (완료)
+ 6. 퀘스트·STAR — 완료 토글, STAR CRUD, AI 보완 계약, 커서 페이지네이션  (완료)
+ 7. 대시보드 — CQRS 스냅샷, 레이더 완료율                          (완료)
+ 8. 내보내기 — MD (완료), PDF(한글 폰트) 미구현
+ 9. 메시징 — Outbox 릴레이, fanout 컨슈머, SSE                    (완료)
+10. 비동기 경로 — 202, SSE 진행률, 정합성 스케줄러                  (완료)
+11. 앱 연동 — S3 Presigned, heartbeat, 48h 스케줄러               (완료)
+12. 마무리 — 캐시(부분), 테스트(부분), Dockerfile(완료)
 ```
 
 테스트 필수: M값 병합, 조립(선후관계·Priority), 완료율·stage(퇴화 방지), 레이더, 낙관적 락, 스냅샷 멱등성, Outbox 롤백, 이벤트 멱등 소비, 정합성 스케줄러 폴백.
