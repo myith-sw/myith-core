@@ -56,7 +56,39 @@ class AiEnhancementControllerTest {
         assertEquals(200, response.getStatusCode().value());
     }
 
-    // ── Bug ② 타임아웃 ──
+    // ── Bug ② questId 접두사 ──
+
+    @Test
+    @DisplayName("COMPLETED 결과에 questId가 숫자로 있으면 qst_ 접두사가 붙어야 한다")
+    void completedResult_questIdHasPrefix() {
+        UUID uuid = UUID.randomUUID();
+        resultStore.save(uuid.toString(), """
+                {"status":"COMPLETED","questId":5,"enhancedStar":{"situation":"s","task":"t","action":"a","result":"r"}}""", 30);
+
+        var response = controller.getResult(1L, "aie_" + uuid);
+
+        assertEquals(200, response.getStatusCode().value());
+        String body = response.getBody().toString();
+        assertTrue(body.contains("qst_5"), "questId should be prefixed, got: " + body);
+        assertFalse(body.contains("\"5\""), "raw numeric questId should not appear");
+    }
+
+    @Test
+    @DisplayName("FAILED 결과에 questId가 없으면 null이어야 한다 (qst_0 아님)")
+    void failedResult_questIdIsNull() {
+        UUID uuid = UUID.randomUUID();
+        resultStore.save(uuid.toString(), """
+                {"status":"FAILED","errorCode":"AI_PROVIDER_TIMEOUT"}""", 30);
+
+        var response = controller.getResult(1L, "aie_" + uuid);
+
+        assertEquals(200, response.getStatusCode().value());
+        String body = response.getBody().toString();
+        assertTrue(body.contains("FAILED"), body);
+        assertFalse(body.contains("qst_0"), "questId should be null, not qst_0, got: " + body);
+    }
+
+    // ── Bug ③ 타임아웃 ──
 
     @Test
     @DisplayName("결과 없음 + outbox 존재 + 타임아웃 이내 → PROCESSING")
