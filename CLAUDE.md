@@ -495,6 +495,19 @@ TraceId를 MDC에 저장, RabbitMQ 헤더에 전파. 로그에 항상 포함.
 Worker Alembic이 시드를 적재한다. Core Flyway에 시드 SQL을 넣지 않는다.
 개발 환경에서는 Worker를 먼저 기동해 공유 테이블과 시드를 생성한 뒤 Core를 기동한다.
 
+## 배포 순서 — 순서를 지킬 것
+
+Core 는 `ddl-auto: validate` 로 기동 시 모든 엔티티의 테이블을 검증한다.
+Worker 소유 테이블 6개(job, job_profile, ncs_unit, ncs_certification,
+skill_ncs_map, user_competency)가 없으면 **Core 는 기동하지 못한다.**
+
+1. Worker  alembic upgrade head            ← 공유 테이블 DDL 생성
+2. Worker  python -m app.seed.load_all     ← NCS 265건·자격 521행·10직무 적재
+3. Core    부팅                             ← Flyway V1 → validate 통과
+4. Worker  컨테이너 기동
+
+1·2 를 건너뛰면 Core 가 SchemaManagementException 으로 죽는다.
+
 ---
 
 # PART I. 확장 포인트
@@ -550,6 +563,11 @@ Worker 작업을 만나면: (1) 멈추고 (2) `docs/handoff-to-worker.md`에 기
 ```
 
 테스트 필수: M값 병합, 조립(선후관계·Priority), 완료율·stage(퇴화 방지), 레이더, 낙관적 락, 스냅샷 멱등성, Outbox 롤백, 이벤트 멱등 소비, 정합성 스케줄러 폴백.
+
+### 시연 리스크 — 레벨 해금이 전부-완료 조건이다
+
+QuestUnlockPolicy 는 이전 레벨을 100% 완료해야 다음 레벨을 연다.
+완화 스위치가 없다. 리허설에서 진행이 막히면 recompute 에 모드 인자를 추가해야 한다.
 
 ---
 

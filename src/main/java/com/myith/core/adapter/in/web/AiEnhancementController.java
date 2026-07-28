@@ -6,6 +6,7 @@ import com.myith.core.application.port.AiEnhancementResultStore;
 import com.myith.core.application.port.OutboxRepository;
 import com.myith.core.common.ApiResponse;
 import com.myith.core.common.ErrorResponse;
+import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -215,7 +216,9 @@ public class AiEnhancementController {
                         objectMapper.getTypeFactory().constructCollectionType(List.class, FeedbackEntry.class));
             }
 
-            String questId = node.has("questId") ? node.get("questId").asText() : null;
+            String questId = node.has("questId") && !node.get("questId").isNull()
+                    ? IdCodec.encode(node.get("questId").asLong(), "qst_")
+                    : null;
             String resumeDraft = node.has("resumeDraft") ? node.get("resumeDraft").asText() : null;
             String createdAt = node.has("createdAt") ? node.get("createdAt").asText() : null;
 

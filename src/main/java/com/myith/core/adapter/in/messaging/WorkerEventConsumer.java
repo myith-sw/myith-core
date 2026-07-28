@@ -128,7 +128,7 @@ public class WorkerEventConsumer {
         // SSE 알림
         Long roadmapId = payload.has("roadmapId") ? payload.get("roadmapId").asLong() : null;
         if (roadmapId != null && sseRegistry.hasConnection(roadmapId)) {
-            sseRegistry.send(roadmapId, "aiEnhancementCompleted", Map.of("requestId", requestId));
+            sseRegistry.send(roadmapId, "aiEnhancementCompleted", Map.of("requestId", "aie_" + requestId));
         }
     }
 }
