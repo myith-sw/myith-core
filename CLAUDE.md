@@ -559,15 +559,30 @@ TraceId를 MDC에 저장, RabbitMQ 헤더에 전파. 로그에 항상 포함.
 Worker Alembic이 시드를 적재한다. Core Flyway에 시드 SQL을 넣지 않는다.
 개발 환경에서는 Worker를 먼저 기동해 공유 테이블과 시드를 생성한 뒤 Core를 기동한다.
 
+## 스키마 관리 — Flyway 를 쓰지 않는다
+
+`ddl-auto: update` 로 Hibernate 가 Core 소유 테이블을 관리한다.
+Flyway 는 배포 시 체크섬·이력 충돌로 기동이 반복 실패해 제거했다.
+
+Worker 소유 테이블 7개는 `WorkerOwnedTableFilter` 로 DDL 대상에서 제외한다.
+Hibernate 가 그걸 만들면 Worker Alembic 과 충돌하고 C-3 을 위반한다.
+
+트레이드오프: 스키마 드리프트를 배포 전에 감지하지 못한다.
+시연 규모에서 배포 실패 비용이 더 크다고 판단해 감수한다.
+엔티티에 컬럼을 추가하면 Hibernate 가 자동으로 반영하지만, 이름을 바꾸면
+옛 컬럼이 남는다(`update` 는 삭제하지 않는다). 컬럼 이름은 신중히 정한다.
+
 ## 배포 순서 — 순서를 지킬 것
 
-Core 는 `ddl-auto: validate` 로 기동 시 모든 엔티티의 테이블을 검증한다.
-Worker 소유 테이블 6개(job, job_profile, ncs_unit, ncs_certification,
-skill_ncs_map, user_competency)가 없으면 **Core 는 기동하지 못한다.**
+Core 는 `ddl-auto: update` 로 기동하지만 Worker 소유 테이블은 DDL 에서 제외된다.
+Worker 소유 테이블 7개(job, job_profile, ncs_unit, ncs_certification,
+skill_ncs_map, user_competency, user_quest_guidance)가 없으면
+**Core 는 기동하지만 해당 테이블 조회 시 런타임 에러가 난다.**
+`SharedSchemaCheckRunner` 가 기동 직후 누락을 로그로 알린다.
 
 1. Worker  alembic upgrade head            ← 공유 테이블 DDL 생성
 2. Worker  python -m app.seed.load_all     ← NCS 265건·자격 521행·10직무 적재
-3. Core    부팅                             ← Flyway V1 → validate 통과
+3. Core    부팅                             ← ddl-auto:update + 공유 테이블 점검
 4. Worker  컨테이너 기동
 
 1·2 를 건너뛰면 Core 가 SchemaManagementException 으로 죽는다.
