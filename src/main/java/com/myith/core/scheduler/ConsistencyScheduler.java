@@ -6,7 +6,7 @@ import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
 import com.myith.core.application.port.RoadmapRepository;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.adapter.in.sse.SseRegistry;
-import com.myith.core.domain.diagnosis.UserDiagnosis;
+import com.myith.core.common.IdCodec;
 import com.myith.core.domain.roadmap.Roadmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,7 +101,8 @@ public class ConsistencyScheduler {
                     roadmap.getId(), roadmap.getRetryCount());
 
             if (sseRegistry.hasConnection(roadmap.getId())) {
-                sseRegistry.send(roadmap.getId(), "done", Map.of("roadmapId", roadmap.getId()));
+                sseRegistry.send(roadmap.getId(), "done",
+                        Map.of("roadmapId", IdCodec.encode(roadmap.getId(), "rmp_")));
                 sseRegistry.complete(roadmap.getId());
             }
         }
