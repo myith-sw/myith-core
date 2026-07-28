@@ -74,7 +74,7 @@ public class RoadmapQueryService {
                                 q.getId(), q.getTitle(),
                                 q.getAxisCode(),
                                 axisNameMap.getOrDefault(q.getAxisCode(), q.getAxisCode()),
-                                q.getStatus().name(), q.getSource().name(),
+                                q.getStatus().toApiName(), q.getSource().name(),
                                 q.getOrderInLevel(), q.getVersion()
                         ), Collectors.toList())));
 

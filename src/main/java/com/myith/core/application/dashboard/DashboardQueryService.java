@@ -55,7 +55,7 @@ public class DashboardQueryService {
                 .sorted(Comparator.comparingInt(Quest::getLevel).thenComparingInt(Quest::getOrderInLevel))
                 .collect(Collectors.groupingBy(Quest::getLevel, LinkedHashMap::new,
                         Collectors.mapping(q -> new SkillTreeQuestDto(
-                                q.getId(), q.getTitle(), q.getAxisCode(), q.getStatus().name()
+                                q.getId(), q.getTitle(), q.getAxisCode(), q.getStatus().toApiName()
                         ), Collectors.toList())));
         List<SkillTreeDto> skillTree = byLevel.entrySet().stream()
                 .map(e -> new SkillTreeDto(e.getKey(), e.getValue()))

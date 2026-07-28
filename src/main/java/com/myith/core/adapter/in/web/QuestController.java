@@ -103,7 +103,7 @@ public class QuestController {
             description = """
                     화면 4-2(STAR 입력 탭)에서 textarea blur 또는 debounce 시 호출합니다.
                     각 필드는 trim 후 최대 2000자입니다. 임시 저장이므로 빈 값도 허용합니다.
-                    최초 저장 시 퀘스트 상태가 OPEN → PENDING으로 변경됩니다.
+                    최초 저장 시 퀘스트 상태는 내부적으로 PENDING이 되지만 API 응답에서는 OPEN으로 반환됩니다.
                     AI 제안을 적용해 저장하는 경우 source를 "ai-assisted"로, aiEnhancementId를 해당 요청 ID로 채우세요.
                     완료(DONE)된 퀘스트에도 STAR를 수정할 수 있습니다."""
     )
@@ -121,7 +121,7 @@ public class QuestController {
                                           "result": "평균 응답 시간이 200ms로 감소했다."
                                         },
                                         "source": "manual",
-                                        "status": "PENDING",
+                                        "status": "OPEN",
                                         "version": 4,
                                         "updatedAt": "2026-07-24T03:10:00Z"
                                       }
@@ -240,7 +240,7 @@ public class QuestController {
                         request.star().action(), request.star().result())
                 : null;
         QuestDetailService.ToggleResult result =
-                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), request.version(), starDto);
+                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), starDto);
 
         CompletedQuestInfo questInfo = new CompletedQuestInfo(
                 IdCodec.encode(result.questId(), "qst_"),
@@ -362,12 +362,11 @@ public class QuestController {
             @Schema(description = """
                     퀘스트 상태입니다. 프론트 렌더링 가이드:
                     ■ LOCKED(흰색/회색): 선행 퀘스트 미완료로 잠김. 클릭 불가, 자물쇠 아이콘 표시.
-                    ■ OPEN(기본색): 수행 가능. 클릭하면 STAR 입력 탭으로 이동.
-                    ■ PENDING(기본색+진행표시): STAR를 작성했지만 완료 버튼을 누르지 않은 상태. 점선 테두리 등으로 구분.
+                    ■ OPEN(기본색): 수행 가능. STAR 작성 중인 퀘스트도 OPEN으로 표시됨. 클릭하면 STAR 입력 탭으로 이동.
                     ■ DONE(파란색): 완료된 퀘스트. 체크 아이콘 표시. STAR 수정은 가능.
                     ■ ALREADY_KNOWN(주황색): 자가진단에서 이미 보유한 역량(mastery ≥ 0.66). 접힌 상태로 표시하되,
                        펼쳐서 STAR 작성 가능. 완료율에 포함됨. STAR를 작성해도 DONE으로 바뀌지 않습니다(이미 완료 집계).""", example = "OPEN",
-                    allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
+                    allowableValues = {"LOCKED", "OPEN", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = """
                     퀘스트 종류입니다. SKILL: 스킬 기반 퀘스트(NCS 능력단위 연계). \
                     ACTIVITY: 활동형 퀘스트(skill_code 없음, 실습·포트폴리오 중심). \
@@ -429,13 +428,11 @@ public class QuestController {
             @Schema(description = "저장된 STAR 기록") StarResponse star,
             @Schema(description = "저장 출처", example = "manual") String source,
             @Schema(description = """
-                    저장 후 퀘스트 상태입니다. 상태 전이 규칙:
-                    ■ OPEN → PENDING: 최초 STAR 저장 시 자동 전이.
-                    ■ PENDING 유지: 이미 STAR가 있는 상태에서 수정 시.
+                    저장 후 퀘스트 상태입니다. PENDING은 내부 전용이며 API에서는 OPEN으로 반환됩니다.
+                    ■ OPEN: 수행 가능 (STAR 미작성 또는 작성 중)
                     ■ DONE 유지: 완료된 퀘스트의 STAR를 수정해도 상태는 바뀌지 않음.
-                    ■ ALREADY_KNOWN 유지: 이미 보유 역량의 STAR를 작성해도 상태는 바뀌지 않음.
-                    UI에서는 이 status 값으로 퀘스트 카드의 색상/아이콘을 즉시 갱신하세요.""", example = "PENDING",
-                    allowableValues = {"LOCKED", "OPEN", "PENDING", "DONE", "ALREADY_KNOWN"}) String status,
+                    ■ ALREADY_KNOWN 유지: 이미 보유 역량의 STAR를 작성해도 상태는 바뀌지 않음.""", example = "OPEN",
+                    allowableValues = {"LOCKED", "OPEN", "DONE", "ALREADY_KNOWN"}) String status,
             @Schema(description = """
                     저장 후의 낙관적 락 버전입니다.
                     이어서 PATCH /api/quests/{id}/complete 를 호출한다면 이 값을 그대로 사용하세요.
@@ -448,11 +445,8 @@ public class QuestController {
     record CompleteRequest(
             @Schema(description = "true면 완료 처리, false면 완료 취소(DONE → OPEN)입니다", example = "true")
             @NotNull Boolean completed,
-            @Schema(description = "낙관적 락 버전입니다. GET /api/roadmaps/{id} 또는 GET /api/quests/{id}에서 받은 version 값을 그대로 전달하세요. 409 VERSION_CONFLICT 수신 시 퀘스트 상세 재조회 후 새 version으로 재시도하세요", example = "3")
-            @NotNull Long version,
-            @Schema(description = "함께 저장할 STAR 내용입니다. 생략하면 완료 토글만 수행합니다(기존 동작). " +
-                    "PUT /api/quests/{id}/star를 먼저 호출한 뒤 완료를 호출하면 저장이 version을 올려 409 VERSION_CONFLICT가 발생할 수 있습니다. " +
-                    "'작성 후 완료' UI라면 star를 포함한 이 요청 한 번만 보내세요.", nullable = true)
+            @Schema(description = "함께 저장할 STAR 내용입니다. 생략하면 완료 토글만 수행합니다. " +
+                    "STAR 작성 후 완료를 한 번에 처리하려면 이 필드에 담아 보내세요.", nullable = true)
             @Valid StarInput star
     ) {}
 
