@@ -417,10 +417,11 @@ GET   /api/quests/{id}
     moreCertificationCount: 상한 초과분 개수 (0이면 전부 표시됨)
 
 PATCH /api/quests/{id}/complete    { completed, star? }  ← version 제거(D-17)
-      star를 함께 보내면 PUT /star 불필요. 단 AI 보완 적용 기록(source·aiEnhancementId)은 PUT /star로만 가능.
+      star를 함께 보내면 내부에서 STAR 저장까지 처리한다. 별도 API를 추가 호출하지 않는다.
 PUT   /api/quests/{id}/star        { situation, task, action, result }
                                    → { status, version }
-      완료와 무관한 STAR 저장·수정 및 AI 보완 적용 기록용. 완료와 동시 저장은 PATCH /complete의 star 사용.
+      ⚠ deprecated · Swagger 비노출. 웹 프론트 호환 목적으로 라우팅만 유지.
+      PATCH /complete와 연달아 호출하면 낙관적 락 충돌(409)이 발생한다.
 POST  /api/quests/{id}/ai-enhancements   → 202 { requestId }
 GET   /api/ai-enhancements/{reqId}       → { status, enhancedStar?, feedback[], resumeDraft? }
                                            FAILED 시 enhancedStar·feedback·resumeDraft는 null.

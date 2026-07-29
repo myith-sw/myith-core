@@ -3,6 +3,7 @@ package com.myith.core.adapter.in.web;
 import com.myith.core.application.quest.QuestDetailService;
 import com.myith.core.common.ApiResponse;
 import com.myith.core.common.IdCodec;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -99,17 +100,17 @@ public class QuestController {
     }
 
     // ────────────────── PUT /api/quests/{questId}/star ──────────────────
+    // @Deprecated: PATCH /complete 의 star 필드로 대체됨. 두 API 를 연달아 호출하면
+    // 낙관적 락 충돌(409)이 발생한다. 웹 프론트 호환을 위해 라우팅만 유지.
 
+    @Hidden
+    @Deprecated
     @Operation(
-            summary = "STAR 기록 저장 (임시 저장)",
+            summary = "[Deprecated] STAR 기록 저장",
             description = """
-                    완료와 무관한 STAR 저장·수정 및 AI 보완 적용 기록용입니다.
-                    완료와 동시에 저장하려면 PATCH /complete 의 star 필드를 사용하세요.
-                    화면 4-2(STAR 입력 탭)에서 textarea blur 또는 debounce 시 호출합니다.
-                    각 필드는 trim 후 최대 2000자입니다. 임시 저장이므로 빈 값도 허용합니다.
-                    최초 저장 시 퀘스트 상태는 내부적으로 PENDING이 되지만 API 응답에서는 OPEN으로 반환됩니다.
-                    AI 제안을 적용해 저장하는 경우 source를 "ai-assisted"로, aiEnhancementId를 해당 요청 ID로 채우세요.
-                    완료(DONE)된 퀘스트에도 STAR를 수정할 수 있습니다."""
+                    ⚠️ Deprecated — PATCH /complete 의 star 필드로 대체되었습니다.
+                    이 API 와 PATCH /complete 를 연달아 호출하면 낙관적 락 충돌(409)이 발생합니다.
+                    웹 프론트 호환을 위해 라우팅만 유지합니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공",
@@ -166,9 +167,8 @@ public class QuestController {
             summary = "퀘스트 완료 토글",
             description = """
                     퀘스트 완료 상태를 토글합니다.
-                    ★ star 를 함께 보내면 STAR 저장과 완료가 한 트랜잭션에서 처리됩니다.
-                    star 를 함께 보내면 PUT /star 를 따로 호출할 필요가 없습니다.
-                    단 AI 보완 적용 기록(source·aiEnhancementId)은 PUT /star 로만 가능합니다.
+                    ★ star 를 함께 보내면 내부에서 STAR 저장까지 처리합니다.
+                    STAR 저장을 위해 다른 API 를 추가로 호출하지 마세요.
                     star 를 생략하면 완료 토글만 수행합니다.
                     응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
                     unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
