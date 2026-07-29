@@ -399,6 +399,7 @@ public class QuestDetailService {
         payload.put("questId", questId);
         payload.put("roadmapId", quest.getRoadmapId());
         payload.put("userId", userId);
+        payload.put("skillCode", quest.getSkillCode());
         payload.put("star", Map.of(
                 "situation", situation != null ? situation : "",
                 "task", task != null ? task : "",
