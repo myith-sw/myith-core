@@ -13,7 +13,6 @@ import com.myith.core.domain.roadmap.RoadmapAssembler.Prerequisite;
 import com.myith.core.domain.star.StarRecord;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -171,11 +170,7 @@ public class QuestDetailService {
                 quest.getVersion(), quest.getCreatedAt(), Instant.now()
         );
 
-        try {
-            questRepository.save(updated);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new QuestManageService.OptimisticLockConflictException("Concurrent quest update detected");
-        }
+        questRepository.save(updated);
 
         // 사이드이펙트 1: QuestUnlockPolicy로 전체 퀘스트 상태 재계산
         List<Long> unlockedIds = recomputeQuestStatuses(roadmap);
@@ -355,8 +350,11 @@ public class QuestDetailService {
 
         StarRecord existing = starRecordRepository.findByQuestId(questId).orElse(null);
         if (existing != null) {
-            existing.update(situation, task, action, result);
-            starRecordRepository.save(existing);
+            // 조치 d: 중복 저장 스킵 — 4필드가 동일하면 star_record 쓰기를 건너뛴다
+            if (!starFieldsMatch(existing, situation, task, action, result)) {
+                existing.update(situation, task, action, result);
+                starRecordRepository.save(existing);
+            }
         } else {
             StarRecord record = StarRecord.create(questId, userId, situation, task, action, result);
             starRecordRepository.save(record);
@@ -430,6 +428,71 @@ public class QuestDetailService {
             throw new RuntimeException("Failed to serialize AI enhancement payload", e);
         }
         return eventId;
+    }
+
+    /**
+     * 수렴 확인용: 현재 DB 상태로 ToggleResult를 조립한다.
+     * 재시도 후에도 충돌이 지속되지만 목표 상태가 이미 달성된 경우 사용.
+     */
+    @Transactional(readOnly = true)
+    public ToggleResult buildToggleResultFromCurrentState(Long userId, Long questId) {
+        Quest quest = questRepository.findById(questId)
+                .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
+
+        Roadmap roadmap = roadmapRepository.findById(quest.getRoadmapId())
+                .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
+
+        DashboardSnapshotRepository.SnapshotData snapshot =
+                snapshotRepository.findByRoadmapId(quest.getRoadmapId()).orElse(null);
+
+        List<Quest> allQuests = questRepository.findByRoadmapId(quest.getRoadmapId());
+        Quest nextQuest = allQuests.stream()
+                .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.PENDING)
+                .min(Comparator.comparingInt(Quest::getLevel).thenComparingInt(Quest::getOrderInLevel))
+                .orElse(null);
+
+        int currentLevel = allQuests.stream()
+                .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.DONE
+                        || q.getStatus() == QuestStatus.PENDING)
+                .mapToInt(Quest::getLevel)
+                .max().orElse(1);
+
+        Map<String, String> axisNameMap = buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
+        List<ToggleResult.RadarEntry> radar = parseRadar(snapshot, axisNameMap);
+
+        return new ToggleResult(
+                quest.getId(), quest.getStatus(), quest.getVersion(),
+                quest.getCompletedAt(),
+                List.of(),
+                snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO,
+                snapshot != null ? snapshot.stage() : null,
+                currentLevel,
+                nextQuest != null ? new ToggleResult.NextQuest(nextQuest.getId(), nextQuest.getTitle()) : null,
+                radar
+        );
+    }
+
+    /**
+     * 조치 d: STAR 4필드가 기존 레코드와 동일한지 비교 (trim, null≡blank 동일 취급).
+     */
+    private boolean starFieldsMatch(StarRecord record, String situation, String task,
+                                     String action, String result) {
+        return normalizedEquals(record.getSituation(), situation)
+                && normalizedEquals(record.getTask(), task)
+                && normalizedEquals(record.getAction(), action)
+                && normalizedEquals(record.getResult(), result);
+    }
+
+    private boolean normalizedEquals(String a, String b) {
+        String na = normalizeField(a);
+        String nb = normalizeField(b);
+        return java.util.Objects.equals(na, nb);
+    }
+
+    private String normalizeField(String s) {
+        if (s == null) return null;
+        String trimmed = s.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // ===== DTOs =====

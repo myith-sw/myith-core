@@ -1,6 +1,7 @@
 package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.quest.QuestDetailService;
+import com.myith.core.application.quest.QuestWriteFacade;
 import com.myith.core.common.ApiResponse;
 import com.myith.core.common.IdCodec;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -28,9 +29,12 @@ import java.util.UUID;
 public class QuestController {
 
     private final QuestDetailService questDetailService;
+    private final QuestWriteFacade questWriteFacade;
 
-    public QuestController(QuestDetailService questDetailService) {
+    public QuestController(QuestDetailService questDetailService,
+                           QuestWriteFacade questWriteFacade) {
         this.questDetailService = questDetailService;
+        this.questWriteFacade = questWriteFacade;
     }
 
     // ────────────────── GET /api/quests/{questId} ──────────────────
@@ -109,8 +113,9 @@ public class QuestController {
             summary = "[Deprecated] STAR 기록 저장",
             description = """
                     ⚠️ Deprecated — PATCH /complete 의 star 필드로 대체되었습니다.
-                    이 API 와 PATCH /complete 를 연달아 호출하면 낙관적 락 충돌(409)이 발생합니다.
-                    웹 프론트 호환을 위해 라우팅만 유지합니다."""
+                    웹 프론트 호환을 위해 라우팅만 유지합니다.
+                    PATCH /complete 와 동시에 호출해도 안전합니다. 서버가 직렬화·재시도로 처리합니다.
+                    source·aiEnhancementId 는 현재 저장되지 않는 참고용 필드입니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공",
@@ -131,13 +136,15 @@ public class QuestController {
                                         "updatedAt": "2026-07-24T03:10:00Z"
                                       }
                                     }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED — 잠긴 퀘스트에 쓰기 시도",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = """
+                    직렬화·재시도·상태 수렴 확인을 모두 거친 뒤에도 충돌이 지속될 때만 반환됩니다.
+                    클라이언트는 그대로 재요청하면 됩니다.""",
                     content = @Content(mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
-                                        "code": "QUEST_LOCKED",
-                                        "message": "선행 퀘스트를 먼저 완료해주세요.",
+                                        "code": "VERSION_CONFLICT",
+                                        "message": "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.",
                                         "requestId": "req_01J3ABC"
                                       }
                                     }""")))
@@ -147,7 +154,7 @@ public class QuestController {
             @AuthenticationPrincipal Long userId,
             @PathVariable String questId,
             @Valid @RequestBody SaveStarRequest request) {
-        QuestDetailService.SaveStarResult starResult = questDetailService.saveStar(
+        QuestDetailService.SaveStarResult starResult = questWriteFacade.saveStar(
                 userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
@@ -167,9 +174,11 @@ public class QuestController {
             summary = "퀘스트 완료 토글",
             description = """
                     퀘스트 완료 상태를 토글합니다.
-                    ★ star 를 함께 보내면 내부에서 STAR 저장까지 처리합니다.
-                    STAR 저장을 위해 다른 API 를 추가로 호출하지 마세요.
-                    star 를 생략하면 완료 토글만 수행합니다.
+                    ★ star 를 함께 보내면 내부에서 STAR 저장까지 처리합니다. 생략해도 됩니다.
+                    PUT /star 와 이 API 를 같은 동작에서 함께 호출해도 안전합니다.
+                    서버가 퀘스트 단위로 쓰기를 직렬화하고, 낙관적 락 충돌이 발생하면
+                    최대 3회 자동 재시도하며, 재시도 후에도 목표 상태가 이미 달성되어 있으면
+                    정상 응답을 반환합니다. 정상적인 사용에서는 409 가 발생하지 않습니다.
                     응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
                     unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
                     completed: false를 보내면 완료 취소(DONE → OPEN)가 처리됩니다.""",
@@ -210,7 +219,10 @@ public class QuestController {
                                         ]
                                       }
                                     }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED — 잠긴 퀘스트에 완료 시도",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = """
+                    QUEST_LOCKED — 잠긴 퀘스트에 완료 시도.
+                    VERSION_CONFLICT — 직렬화·재시도·상태 수렴 확인을 모두 거친 뒤에도 충돌이 지속될 때만 반환됩니다.
+                    클라이언트는 그대로 재요청하면 됩니다.""",
                     content = @Content(mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                     {
@@ -232,7 +244,7 @@ public class QuestController {
                         request.star().action(), request.star().result())
                 : null;
         QuestDetailService.ToggleResult result =
-                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), starDto);
+                questWriteFacade.toggleComplete(userId, IdCodec.decode(questId), request.completed(), starDto);
 
         CompletedQuestInfo questInfo = new CompletedQuestInfo(
                 IdCodec.encode(result.questId(), "qst_"),
