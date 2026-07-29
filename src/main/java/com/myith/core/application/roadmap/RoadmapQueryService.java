@@ -214,6 +214,8 @@ public class RoadmapQueryService {
 
         roadmap.archive();
         roadmapRepository.save(roadmap);
+
+        characterRepository.softDeleteById(character.getId());
     }
 
     public static class CharacterNotFoundException extends RuntimeException {

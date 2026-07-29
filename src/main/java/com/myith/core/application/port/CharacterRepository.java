@@ -11,4 +11,5 @@ public interface CharacterRepository {
     List<Character> findByUserId(Long userId);
     Optional<Character> findByRoadmapId(Long roadmapId);
     void softDeleteByUserId(Long userId);
+    void softDeleteById(Long characterId);
 }

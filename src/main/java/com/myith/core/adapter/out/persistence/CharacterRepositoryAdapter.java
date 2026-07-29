@@ -45,4 +45,9 @@ public class CharacterRepositoryAdapter implements CharacterRepository {
     public void softDeleteByUserId(Long userId) {
         jpaRepository.softDeleteByUserId(userId);
     }
+
+    @Override
+    public void softDeleteById(Long characterId) {
+        jpaRepository.softDeleteById(characterId);
+    }
 }
