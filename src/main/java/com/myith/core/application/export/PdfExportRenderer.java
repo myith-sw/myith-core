@@ -1,6 +1,8 @@
 package com.myith.core.application.export;
 
 import com.lowagie.text.pdf.BaseFont;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.xhtmlrenderer.pdf.ITextFontResolver;
 import org.xhtmlrenderer.pdf.ITextRenderer;
@@ -14,19 +16,20 @@ import java.nio.file.StandardCopyOption;
 @Component
 public class PdfExportRenderer implements ExportRenderer {
 
-    private static final String FONT_PATH = "/fonts/NotoSansKR-Regular.ttf";
-    private static final String FONT_FAMILY = "Noto Sans KR";
+    private static final Logger log = LoggerFactory.getLogger(PdfExportRenderer.class);
+    private static final String FONT_RESOURCE = "/fonts/NotoSansKR-Regular.ttf";
 
     private volatile String fontFilePath;
+    private volatile String resolvedFamilyName;
 
     @Override
     public byte[] render(ExportData data) {
-        String fontPath = ensureFontFile();
-        String html = buildHtml(data, fontPath);
+        ensureFontFile();
+        String html = buildHtml(data);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             ITextRenderer renderer = new ITextRenderer();
             ITextFontResolver fontResolver = renderer.getFontResolver();
-            fontResolver.addFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            fontResolver.addFont(fontFilePath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
             renderer.setDocumentFromString(html);
             renderer.layout();
             renderer.createPDF(out);
@@ -36,23 +39,24 @@ public class PdfExportRenderer implements ExportRenderer {
         }
     }
 
-    /**
-     * classpath의 폰트를 임시 파일로 추출한다.
-     * Flying Saucer의 addFont()는 jar: URL을 처리하지 못하므로 실제 파일 경로가 필요하다.
-     */
-    private String ensureFontFile() {
-        if (fontFilePath != null) return fontFilePath;
+    private void ensureFontFile() {
+        if (fontFilePath != null) return;
         synchronized (this) {
-            if (fontFilePath != null) return fontFilePath;
-            try (InputStream is = getClass().getResourceAsStream(FONT_PATH)) {
+            if (fontFilePath != null) return;
+            try (InputStream is = getClass().getResourceAsStream(FONT_RESOURCE)) {
                 if (is == null) {
-                    throw new IllegalStateException("Korean font not found on classpath: " + FONT_PATH);
+                    throw new IllegalStateException("Korean font not found on classpath: " + FONT_RESOURCE);
                 }
                 Path tempFile = Files.createTempFile("NotoSansKR", ".ttf");
                 Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
                 tempFile.toFile().deleteOnExit();
                 fontFilePath = tempFile.toAbsolutePath().toString();
-                return fontFilePath;
+
+                // BaseFont에서 실제 family name을 읽어 CSS와 정확히 일치시킨다
+                BaseFont bf = BaseFont.createFont(fontFilePath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                String[][] families = bf.getFamilyFontName();
+                resolvedFamilyName = (families.length > 0) ? families[0][3] : "Noto Sans KR";
+                log.info("PDF font loaded: family='{}', path={}", resolvedFamilyName, fontFilePath);
             } catch (IllegalStateException e) {
                 throw e;
             } catch (Exception e) {
@@ -71,8 +75,12 @@ public class PdfExportRenderer implements ExportRenderer {
         return "pdf";
     }
 
-    private String buildHtml(ExportData data, String fontPath) {
-        String fontUrl = Path.of(fontPath).toUri().toString();
+    private String buildHtml(ExportData data) {
+        // @font-face를 쓰지 않는다. addFont()으로 등록한 폰트를 CSS font-family로 직접 참조한다.
+        // @font-face의 src: url(...)이 Docker 컨테이너 안에서 리졸브에 실패하면
+        // addFont()으로 등록한 정상 폰트를 덮어써서 한글이 렌더링되지 않는다.
+        String family = resolvedFamilyName;
+
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n");
@@ -81,13 +89,7 @@ public class PdfExportRenderer implements ExportRenderer {
         sb.append("<head>\n");
         sb.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>\n");
         sb.append("<style>\n");
-        // @font-face with -fs-font-metric-src is required for Flying Saucer CJK rendering
-        sb.append("@font-face {\n");
-        sb.append("  font-family: '").append(FONT_FAMILY).append("';\n");
-        sb.append("  src: url('").append(fontUrl).append("');\n");
-        sb.append("  -fs-font-metric-src: url('").append(fontUrl).append("');\n");
-        sb.append("}\n");
-        sb.append("body { font-family: '").append(FONT_FAMILY).append("', sans-serif; font-size: 11pt; margin: 40px; }\n");
+        sb.append("body { font-family: '").append(family).append("', sans-serif; font-size: 11pt; margin: 40px; }\n");
         sb.append("h1 { font-size: 18pt; margin-bottom: 4px; }\n");
         sb.append("h2 { font-size: 14pt; margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }\n");
         sb.append(".meta { color: #555; margin-bottom: 16px; }\n");
