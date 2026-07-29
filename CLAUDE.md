@@ -417,8 +417,10 @@ GET   /api/quests/{id}
     moreCertificationCount: 상한 초과분 개수 (0이면 전부 표시됨)
 
 PATCH /api/quests/{id}/complete    { completed, star? }  ← version 제거(D-17)
+      star를 함께 보내면 PUT /star 불필요. 단 AI 보완 적용 기록(source·aiEnhancementId)은 PUT /star로만 가능.
 PUT   /api/quests/{id}/star        { situation, task, action, result }
                                    → { status, version }
+      완료와 무관한 STAR 저장·수정 및 AI 보완 적용 기록용. 완료와 동시 저장은 PATCH /complete의 star 사용.
 POST  /api/quests/{id}/ai-enhancements   → 202 { requestId }
 GET   /api/ai-enhancements/{reqId}       → { status, enhancedStar?, feedback[], resumeDraft? }
                                            FAILED 시 enhancedStar·feedback·resumeDraft는 null.

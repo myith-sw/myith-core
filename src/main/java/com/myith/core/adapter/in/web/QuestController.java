@@ -103,6 +103,8 @@ public class QuestController {
     @Operation(
             summary = "STAR 기록 저장 (임시 저장)",
             description = """
+                    완료와 무관한 STAR 저장·수정 및 AI 보완 적용 기록용입니다.
+                    완료와 동시에 저장하려면 PATCH /complete 의 star 필드를 사용하세요.
                     화면 4-2(STAR 입력 탭)에서 textarea blur 또는 debounce 시 호출합니다.
                     각 필드는 trim 후 최대 2000자입니다. 임시 저장이므로 빈 값도 허용합니다.
                     최초 저장 시 퀘스트 상태는 내부적으로 PENDING이 되지만 API 응답에서는 OPEN으로 반환됩니다.
@@ -165,6 +167,8 @@ public class QuestController {
             description = """
                     퀘스트 완료 상태를 토글합니다.
                     ★ star 를 함께 보내면 STAR 저장과 완료가 한 트랜잭션에서 처리됩니다.
+                    star 를 함께 보내면 PUT /star 를 따로 호출할 필요가 없습니다.
+                    단 AI 보완 적용 기록(source·aiEnhancementId)은 PUT /star 로만 가능합니다.
                     star 를 생략하면 완료 토글만 수행합니다.
                     응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
                     unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
