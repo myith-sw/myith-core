@@ -26,7 +26,7 @@ public class InactivityScheduler {
     private final long cooldownHours;
 
     public InactivityScheduler(UserRepository userRepository,
-                               @Value("${policy.inactivity.threshold-hours}") long thresholdHours,
+                               @Value("${myith.nudge.thresholds.absence-hours}") long thresholdHours,
                                @Value("${policy.nudge.cooldown-hours}") long cooldownHours) {
         this.userRepository = userRepository;
         this.thresholdHours = thresholdHours;

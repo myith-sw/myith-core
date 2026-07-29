@@ -17,4 +17,6 @@ public interface QuestJpaRepository extends JpaRepository<QuestJpaEntity, Long> 
     @Modifying
     @Query("UPDATE QuestJpaEntity q SET q.deletedAt = CURRENT_TIMESTAMP WHERE q.roadmapId IN :roadmapIds AND q.deletedAt IS NULL")
     void softDeleteByRoadmapIds(@Param("roadmapIds") List<Long> roadmapIds);
+
+    long countByRoadmapIdAndStatusAndDeletedAtIsNull(Long roadmapId, String status);
 }

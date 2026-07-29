@@ -448,17 +448,31 @@ POST /api/heartbeat → { nudge, nudgeType?, nudgeMessage?, characterState:{ spe
 
 nudge=true일 때 nudgeType(종류)과 nudgeMessage(표시 문구)를 함께 반환한다. Electron은 이 문구를 그대로 표시한다.
 
+nudgeType 3종 (우선순위 순):
+| nudgeType | 조건 |
+|---|---|
+| `ABSENCE_48H` | 48시간 미접속 |
+| `UPSET` | 24시간 미접속 |
+| `ANNOYING` | 12시간 미접속 + OPEN 퀘스트 3개 이상 |
+
+복수 성립 시 우선순위가 높은 하나만 반환. 문구는 `myith.nudge.messages`에서 가져온다.
+
+인증은 웹·Electron 공용. `POST /api/auth/google`에 Desktop Client ID 토큰도 허용한다.
+`google.desktop-client-id` 설정이 비어 있으면 웹 Client ID만 동작한다.
+
 ## F-11. 시연 전용
 
 ```
 POST /api/demo/nudge   Header: X-Demo-Token
-  { userId, nudgeType }
-→ 200 { queued, deliverWithinSeconds }
+  ?userId={id}&type=ANNOYING
+→ 200 { queued, nudgeType, deliverWithinSeconds }
+→ 400 INVALID_NUDGE_TYPE
 → 403 데모 모드 꺼짐 또는 토큰 불일치
 ```
 
+`type`은 optional, 생략 시 `ABSENCE_48H`. 허용값: `ANNOYING`, `UPSET`, `ABSENCE_48H`.
 `myith.demo.enabled=true`일 때만 빈이 등록된다. 기본 꺼짐.
-다음 heartbeat 호출 시 해당 userId에 대해 1회성 nudge를 반환한다.
+데모 경로는 넛지 쿨다운·1회성 판정을 우회한다. 연속 트리거 가능.
 
 ---
 

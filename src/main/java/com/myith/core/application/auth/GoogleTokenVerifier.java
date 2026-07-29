@@ -12,7 +12,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.util.Collections;
+import java.util.List;
+import java.util.stream.Stream;
 
 @Component
 public class GoogleTokenVerifier {
@@ -21,13 +22,19 @@ public class GoogleTokenVerifier {
 
     private final GoogleIdTokenVerifier verifier;
 
-    public GoogleTokenVerifier(@Value("${google.client-id}") String clientId) {
-        log.info("Google OAuth client-id configured: {}...{}",
-                clientId.length() > 8 ? clientId.substring(0, 8) : clientId,
-                clientId.length() > 8 ? clientId.substring(clientId.length() - 4) : "");
+    public GoogleTokenVerifier(
+            @Value("${google.client-id}") String webClientId,
+            @Value("${google.desktop-client-id:}") String desktopClientId) {
+
+        List<String> audiences = Stream.of(webClientId, desktopClientId)
+                .filter(s -> s != null && !s.isBlank())
+                .toList();
+
+        log.info("Google OAuth audiences configured: {}", audiences.size());
+
         this.verifier = new GoogleIdTokenVerifier.Builder(
                 new NetHttpTransport(), GsonFactory.getDefaultInstance())
-                .setAudience(Collections.singletonList(clientId))
+                .setAudience(audiences)
                 .build();
     }
 

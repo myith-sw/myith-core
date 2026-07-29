@@ -72,7 +72,7 @@ public class PdfExportRenderer implements ExportRenderer {
     }
 
     private String buildHtml(ExportData data, String fontPath) {
-        String fontUrl = "file:///" + fontPath.replace("\\", "/");
+        String fontUrl = Path.of(fontPath).toUri().toString();
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n");

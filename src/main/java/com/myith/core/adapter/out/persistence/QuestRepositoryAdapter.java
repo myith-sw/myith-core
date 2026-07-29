@@ -2,6 +2,7 @@ package com.myith.core.adapter.out.persistence;
 
 import com.myith.core.application.port.QuestRepository;
 import com.myith.core.domain.roadmap.Quest;
+import com.myith.core.domain.roadmap.QuestStatus;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -59,5 +60,10 @@ public class QuestRepositoryAdapter implements QuestRepository {
         if (!roadmapIds.isEmpty()) {
             jpaRepository.softDeleteByRoadmapIds(roadmapIds);
         }
+    }
+
+    @Override
+    public long countByRoadmapIdAndStatus(Long roadmapId, QuestStatus status) {
+        return jpaRepository.countByRoadmapIdAndStatusAndDeletedAtIsNull(roadmapId, status.name());
     }
 }
