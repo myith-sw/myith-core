@@ -35,6 +35,8 @@ public class QuestUnlockPolicy {
                 .sorted()
                 .toList();
 
+        int minLevel = sortedLevels.isEmpty() ? 1 : sortedLevels.get(0);
+
         Set<Integer> unlockedLevels = new HashSet<>();
         for (int i = 0; i < sortedLevels.size(); i++) {
             int level = sortedLevels.get(i);
@@ -78,10 +80,9 @@ public class QuestUnlockPolicy {
             // 레벨 해금 여부
             boolean levelUnlocked = unlockedLevels.contains(quest.getLevel());
 
-            // 선행관계 충족 여부
+            // 선행관계 충족 여부 (최소 레벨은 선행관계를 무시한다 — Lv1은 항상 열림)
             boolean prereqsMet;
-            if (quest.getSkillCode() == null) {
-                // 활동형/사용자정의는 선행관계 제약을 받지 않음
+            if (quest.getLevel() <= minLevel || quest.getSkillCode() == null) {
                 prereqsMet = true;
             } else {
                 Set<String> required = prereqMap.get(quest.getSkillCode());

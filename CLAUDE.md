@@ -213,10 +213,11 @@ email→'deleted_{id}@myith.local', google_id→null, nickname→'탈퇴한 사�
 ## D-14. 레벨 해금 규칙
 
 ```
-Lv1 퀘스트     : 항상 해금 후보
+Lv1 퀘스트     : 항상 OPEN (레벨 해금 + 선행관계 모두 면제)
 Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)해야 해금 후보
 
 최종 상태 = (레벨 해금 후보) AND (선행관계 충족) → OPEN
+           Lv1은 예외: 선행관계가 있어도 OPEN
             그 외 → LOCKED
 ```
 
