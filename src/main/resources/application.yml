@@ -50,6 +50,7 @@ jwt:
 # Google OAuth
 google:
   client-id: ${GOOGLE_CLIENT_ID:}
+  desktop-client-id: ${GOOGLE_DESKTOP_CLIENT_ID:}
 
 # AWS S3
 aws:
@@ -67,8 +68,6 @@ policy:
     interval-seconds: ${HEARTBEAT_INTERVAL:60}
   activity:
     throttle-minutes: ${ACTIVITY_THROTTLE:5}
-  inactivity:
-    threshold-hours: ${INACTIVITY_THRESHOLD:48}
   nudge:
     cooldown-hours: ${NUDGE_COOLDOWN:24}
   cache:
@@ -106,7 +105,14 @@ policy:
 
 myith:
   nudge:
+    thresholds:
+      annoying-hours: ${NUDGE_ANNOYING_HOURS:12}
+      annoying-open-quests: ${NUDGE_ANNOYING_QUESTS:3}
+      upset-hours: ${NUDGE_UPSET_HOURS:24}
+      absence-hours: ${NUDGE_ABSENCE_HOURS:48}
     messages:
+      ANNOYING: "완료하지 않은 퀘스트가 기다리고 있어요."
+      UPSET: "하루 종일 안 보이네요. 잠깐이라도 들러줄래요?"
       ABSENCE_48H: "이틀 동안 못 봤어요. 오늘 퀘스트 하나만 해볼까요?"
   demo:
     enabled: ${MYITH_DEMO_ENABLED:false}
