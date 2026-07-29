@@ -36,6 +36,7 @@ public class QuestDetailService {
     private final DashboardSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
     private final int maxRetries;
+    private final int certMaxDisplayCount;
 
     public QuestDetailService(QuestRepository questRepository,
                               RoadmapRepository roadmapRepository,
@@ -47,7 +48,8 @@ public class QuestDetailService {
                               UserQuestGuidanceReadRepository guidanceReadRepository,
                               DashboardSnapshotRepository snapshotRepository,
                               ObjectMapper objectMapper,
-                              @Value("${policy.optimistic-lock.max-retries}") int maxRetries) {
+                              @Value("${policy.optimistic-lock.max-retries}") int maxRetries,
+                              @Value("${policy.certification.max-display-count}") int certMaxDisplayCount) {
         this.questRepository = questRepository;
         this.roadmapRepository = roadmapRepository;
         this.starRecordRepository = starRecordRepository;
@@ -59,6 +61,7 @@ public class QuestDetailService {
         this.snapshotRepository = snapshotRepository;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
+        this.certMaxDisplayCount = certMaxDisplayCount;
     }
 
     @Transactional(readOnly = true)
@@ -73,13 +76,23 @@ public class QuestDetailService {
         // NCS 단위 + 자격 조회 (DB에서만, NCS API 호출 금지 C-1)
         NcsUnitDto ncsUnit = null;
         List<CertDto> certifications = List.of();
+        int moreCertificationCount = 0;
         if (quest.getNcsUnitCode() != null) {
             ncsUnit = ncsReadRepository.findUnitByCode(quest.getNcsUnitCode())
                     .map(e -> new NcsUnitDto(e.code(), e.name(), e.description()))
                     .orElse(null);
-            certifications = ncsReadRepository.findCertificationsByUnitCode(quest.getNcsUnitCode()).stream()
+            List<CertDto> allCerts = ncsReadRepository.findCertificationsByUnitCode(quest.getNcsUnitCode()).stream()
+                    .sorted(Comparator.comparing((NcsReadRepository.CertificationData c) ->
+                                    !"필수".equals(c.unitType()))
+                            .thenComparing(NcsReadRepository.CertificationData::certName))
                     .map(e -> new CertDto(e.certName()))
                     .toList();
+            if (allCerts.size() > certMaxDisplayCount) {
+                certifications = allCerts.subList(0, certMaxDisplayCount);
+                moreCertificationCount = allCerts.size() - certMaxDisplayCount;
+            } else {
+                certifications = allCerts;
+            }
         }
 
         // STAR 조회
@@ -104,7 +117,8 @@ public class QuestDetailService {
                 quest.getAxisCode(), axisName, quest.getLevel(),
                 quest.getStatus().toApiName(), quest.getSource().name(),
                 quest.getOrderInLevel(), quest.getVersion(),
-                ncsUnit, certifications, quest.getCompletionCriteria(), guidance, star, updatedAt);
+                ncsUnit, certifications, moreCertificationCount,
+                quest.getCompletionCriteria(), guidance, star, updatedAt);
     }
 
     /**
@@ -423,6 +437,7 @@ public class QuestDetailService {
                                  String axisCode, String axisName, int level,
                                  String status, String source, int order, long version,
                                  NcsUnitDto ncsUnit, List<CertDto> certifications,
+                                 int moreCertificationCount,
                                  String completionCriteria, String guidance,
                                  StarDto star, String updatedAt) {}
     public record NcsUnitDto(String code, String name, String description) {}

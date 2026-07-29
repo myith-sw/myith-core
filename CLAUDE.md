@@ -410,8 +410,11 @@ DELETE /api/roadmaps/{id}/quests/{qid}  -- CUSTOM만
 ```
 GET   /api/quests/{id}
 → { questId, title, axisName, level, status, guidance?,
-    ncsUnit:{ code, name, description }|null, certifications:[{ name }],
+    ncsUnit:{ code, name, description }|null,
+    certifications:[{ name }], moreCertificationCount (int),
     completionCriteria, star:{ situation, task, action, result }|null }
+    certifications: unit_type '필수' 우선 → 가나다순, 최대 policy.certification.max-display-count개(기본 5)
+    moreCertificationCount: 상한 초과분 개수 (0이면 전부 표시됨)
 
 PATCH /api/quests/{id}/complete    { completed, star? }  ← version 제거(D-17)
 PUT   /api/quests/{id}/star        { situation, task, action, result }

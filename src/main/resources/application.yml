@@ -95,6 +95,8 @@ policy:
   collect:
     cron: ${COLLECT_CRON:0 0 4 * * MON}
     enabled: ${COLLECT_ENABLED:true}
+  certification:
+    max-display-count: ${CERT_MAX_DISPLAY:5}
   consistency:
     max-retries: ${CONSISTENCY_MAX_RETRIES:3}
   analysis:

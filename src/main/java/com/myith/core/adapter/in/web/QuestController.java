@@ -39,7 +39,7 @@ public class QuestController {
             description = """
                     화면 4-2(퀘스트 상세 + STAR)에서 호출합니다.
                     ncsUnit은 source가 CUSTOM이면 null입니다. null인 경우 'NCS 근거' 섹션 자체를 숨기세요.
-                    certifications는 연계 자격 전체를 반환합니다. 빈 배열이면 '해당 없음'을 표시하세요.
+                    certifications는 unit_type '필수' 우선·가나다순 정렬, 최대 5개(설정값)까지 반환합니다. 잘린 개수는 moreCertificationCount로 내려옵니다. 빈 배열이면 '해당 없음'을 표시하세요.
                     star가 null이면 STAR 입력칸을 빈 값으로 초기화하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
@@ -64,8 +64,10 @@ public class QuestController {
                                   "description": "자료구조와 알고리즘 등 기초 기술을 활용하는 능력"
                                 },
                                 "certifications": [
-                                  { "name": "정보처리기사" }
+                                  { "name": "정보처리기사" },
+                                  { "name": "정보처리산업기사" }
                                 ],
+                                "moreCertificationCount": 3,
                                 "star": null,
                                 "starSource": null,
                                 "updatedAt": "2026-07-24T03:00:00Z"
@@ -87,6 +89,7 @@ public class QuestController {
                 dto.certifications() != null
                         ? dto.certifications().stream().map(c -> new CertResponse(c.name())).toList()
                         : List.of(),
+                dto.moreCertificationCount(),
                 dto.star() != null
                         ? new StarResponse(dto.star().situation(), dto.star().task(), dto.star().action(), dto.star().result())
                         : null,
@@ -368,7 +371,8 @@ public class QuestController {
                     nullable = true,
                     example = "Git 형상관리이(가) 처음이라면 기본 개념부터 차근히 익혀보세요.") String guidance,
             @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스에 표시합니다. source가 CUSTOM이면 null이므로 섹션 자체를 숨기세요", nullable = true) NcsUnitResponse ncsUnit,
-            @Schema(description = "화면 4-2 '추천 자격' 목록입니다. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
+            @Schema(description = "화면 4-2 '추천 자격' 목록입니다. unit_type '필수' 우선, 가나다순 정렬. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
+            @Schema(description = "상한(기본 5개)을 초과해 잘린 자격 수. 0이면 전부 표시된 것. '외 N개'로 표기하세요", example = "3") int moreCertificationCount,
             @Schema(description = "화면 4-2 STAR 입력칸 4개의 초기값입니다. null이면 빈 값으로 초기화하세요", nullable = true) StarResponse star,
             @Schema(description = "STAR 출처. manual 또는 ai-assisted", nullable = true) String starSource,
             @Schema(description = "최근 수정일", example = "2026-07-24T03:00:00Z") String updatedAt

@@ -27,7 +27,7 @@ public class NcsReadRepositoryAdapter implements NcsReadRepository {
     @Override
     public List<CertificationData> findCertificationsByUnitCode(String unitCode) {
         return certRepo.findByNcsUnitCode(unitCode).stream()
-                .map(e -> new CertificationData(e.getCertName()))
+                .map(e -> new CertificationData(e.getCertName(), e.getUnitType()))
                 .toList();
     }
 }
