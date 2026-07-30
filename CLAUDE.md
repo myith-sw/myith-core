@@ -212,9 +212,16 @@ email→'deleted_{id}@myith.local', google_id→null, nickname→'탈퇴한 사�
 
 인스턴스별 임시 큐(`core.sse.{instanceId}`, auto-delete, exclusive)로 Worker fanout exchange 구독. SSE 레지스트리에 해당 roadmapId 연결이 있으면 전달, 없으면 무시. 상태 변경 이벤트는 `processed_event`로 멱등 처리.
 
-## D-13. 정합성 스케줄러
+## D-13. 비동기 조립: 즉시 경로 + 정합성 스케줄러(안전망)
 
-매 1분: `generation_state='ANALYZING'`이고 `updated_at < now()-60초`인 로드맵을 스캔. user_competency 있으면 보정 조립, 없으면 자가진단만으로 폴백 조립, 3회 초과 시 FAILED. DB만 본다.
+정상 경로: `CompetencyExtracted` 이벤트 수신 즉시 `assembleAndSnapshot()` 호출.
+ANALYZING 상태인 로드맵만 조립하고, 이미 READY/FAILED면 스킵(중복 방지).
+
+정합성 스케줄러는 Worker가 이벤트를 발행하지 못한 경우의 안전망이다.
+매 1분: `generation_state='ANALYZING'`이고 `updated_at < now()-180초`인 로드맵을 스캔.
+user_competency 있으면 보정값 반영 조립, 없고 retry < max-retries면 대기,
+max-retries(3) 도달 시 자가진단만으로 조립해 READY로 확정한다(FAILED로 만들지 않는다).
+DB만 본다.
 
 ## D-14. 레벨 해금 규칙
 

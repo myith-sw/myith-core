@@ -1,12 +1,11 @@
 package com.myith.core.scheduler;
 
-import com.myith.core.application.port.DiagnosisRepository;
-import com.myith.core.application.port.JobProfileReadRepository;
+import com.myith.core.application.port.*;
 import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
-import com.myith.core.application.port.RoadmapRepository;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.adapter.in.sse.SseRegistry;
 import com.myith.core.common.IdCodec;
+import com.myith.core.domain.roadmap.MasteryMerger.CompetencyEntry;
 import com.myith.core.domain.roadmap.Roadmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +19,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 정합성 스케줄러 (D-13).
- * Worker가 결과를 DB에 쓴 뒤 이벤트 발행 전에 죽으면 Core는 영원히 대기.
- * 이 스케줄러가 DB만 보고 폴백 조립을 수행한다.
+ * 정합성 스케줄러 (D-13) — 안전망.
+ * 정상 경로: CompetencyExtracted 수신 즉시 조립 (WorkerEventConsumer).
+ * 이 스케줄러는 Worker가 이벤트를 발행하지 못한 경우에만 개입한다.
+ * max-retries 도달 시 자가진단만으로 조립해 READY로 확정한다(FAILED로 만들지 않는다).
  */
 @Component
 public class ConsistencyScheduler {
@@ -32,6 +32,7 @@ public class ConsistencyScheduler {
     private final RoadmapRepository roadmapRepository;
     private final JobProfileReadRepository jobProfileReadRepository;
     private final DiagnosisRepository diagnosisRepository;
+    private final UserCompetencyReadRepository userCompetencyReadRepository;
     private final RoadmapCreateService roadmapCreateService;
     private final SseRegistry sseRegistry;
     private final int maxRetries;
@@ -40,6 +41,7 @@ public class ConsistencyScheduler {
     public ConsistencyScheduler(RoadmapRepository roadmapRepository,
                                 JobProfileReadRepository jobProfileReadRepository,
                                 DiagnosisRepository diagnosisRepository,
+                                UserCompetencyReadRepository userCompetencyReadRepository,
                                 RoadmapCreateService roadmapCreateService,
                                 SseRegistry sseRegistry,
                                 @Value("${policy.consistency.max-retries:3}") int maxRetries,
@@ -47,6 +49,7 @@ public class ConsistencyScheduler {
         this.roadmapRepository = roadmapRepository;
         this.jobProfileReadRepository = jobProfileReadRepository;
         this.diagnosisRepository = diagnosisRepository;
+        this.userCompetencyReadRepository = userCompetencyReadRepository;
         this.roadmapCreateService = roadmapCreateService;
         this.sseRegistry = sseRegistry;
         this.maxRetries = maxRetries;
@@ -60,19 +63,6 @@ public class ConsistencyScheduler {
         List<Roadmap> stuck = roadmapRepository.findStuckAnalyzing(cutoff);
 
         for (Roadmap roadmap : stuck) {
-            if (roadmap.getRetryCount() >= maxRetries) {
-                roadmap.markFailed();
-                roadmapRepository.save(roadmap);
-                log.warn("Roadmap {} marked FAILED after {} retries", roadmap.getId(), maxRetries);
-
-                if (sseRegistry.hasConnection(roadmap.getId())) {
-                    sseRegistry.send(roadmap.getId(), "error", Map.of(
-                            "code", "GENERATION_FAILED", "message", "로드맵 생성에 실패했습니다."));
-                    sseRegistry.complete(roadmap.getId());
-                }
-                continue;
-            }
-
             roadmap.incrementRetry();
 
             // job_profile 조회
@@ -87,18 +77,30 @@ public class ConsistencyScheduler {
                 continue;
             }
 
-            // 자가진단 조회
+            // user_competency 존재 여부 확인
+            Map<String, CompetencyEntry> competencies =
+                    userCompetencyReadRepository.findByRoadmapId(roadmap.getId());
+            boolean hasCompetency = !competencies.isEmpty();
+
+            // competency 없고 max-retries 미도달 → Worker를 더 기다린다
+            if (!hasCompetency && roadmap.getRetryCount() < maxRetries) {
+                roadmapRepository.save(roadmap);
+                log.info("Consistency scheduler: roadmap {} waiting for competency (retry={}/{})",
+                        roadmap.getId(), roadmap.getRetryCount(), maxRetries);
+                continue;
+            }
+
+            // competency가 있거나 max-retries 도달 → 조립 확정
+            // max-retries 도달 시 competency 없이 자가진단만으로 조립 (FAILED로 만들지 않는다)
             List<RoadmapCreateService.AnswerDto> answers = diagnosisRepository
                     .findByRoadmapId(roadmap.getId()).stream()
                     .map(d -> new RoadmapCreateService.AnswerDto(d.getSkillCode(), d.getMastery()))
                     .toList();
 
-            // 폴백 조립 (user_competency 유무와 무관하게 자가진단만으로 조립)
-            // TODO: user_competency가 있으면 보정값 반영해서 조립 (Worker 연동 후)
             roadmapCreateService.assembleAndSnapshot(roadmap, profile, answers);
 
-            log.info("Consistency scheduler: roadmap {} fallback assembled (retry={})",
-                    roadmap.getId(), roadmap.getRetryCount());
+            log.info("Consistency scheduler: roadmap {} assembled (retry={}, competency={})",
+                    roadmap.getId(), roadmap.getRetryCount(), hasCompetency);
 
             if (sseRegistry.hasConnection(roadmap.getId())) {
                 sseRegistry.send(roadmap.getId(), "done",
