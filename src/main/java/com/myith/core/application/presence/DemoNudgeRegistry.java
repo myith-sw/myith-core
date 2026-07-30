@@ -13,16 +13,18 @@ public class DemoNudgeRegistry {
 
     private static final Set<String> VALID_TYPES = Set.of("ANNOYING", "UPSET", "ABSENCE_48H");
 
-    private final Map<Long, String> pending = new ConcurrentHashMap<>();
+    public record Pending(String type, String message) {}
 
-    public void queue(Long userId, String type) {
-        pending.put(userId, type);
+    private final Map<Long, Pending> pending = new ConcurrentHashMap<>();
+
+    public void queue(Long userId, String type, String message) {
+        pending.put(userId, new Pending(type, message));
     }
 
     /**
-     * 대기 중인 타입을 반환하고 제거한다. 없으면 null.
+     * 대기 중인 Pending을 반환하고 제거한다. 없으면 null.
      */
-    public String consume(Long userId) {
+    public Pending consume(Long userId) {
         return pending.remove(userId);
     }
 

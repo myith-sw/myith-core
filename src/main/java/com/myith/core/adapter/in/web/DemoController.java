@@ -49,7 +49,9 @@ public class DemoController {
             @RequestHeader("X-Demo-Token") String token,
             @RequestParam Long userId,
             @Parameter(description = "넛지 종류. 생략 시 ABSENCE_48H")
-            @RequestParam(required = false, defaultValue = "ABSENCE_48H") String type) {
+            @RequestParam(required = false, defaultValue = "ABSENCE_48H") String type,
+            @Parameter(description = "커스텀 문구. 생략 시 application.yml 기본 문구")
+            @RequestParam(required = false) String message) {
 
         if (demoToken.isBlank() || !demoToken.equals(token)) {
             return ResponseEntity.status(403)
@@ -67,7 +69,7 @@ public class DemoController {
                             "message", "허용된 type: ANNOYING, UPSET, ABSENCE_48H"));
         }
 
-        demoNudgeRegistry.queue(userId, type);
+        demoNudgeRegistry.queue(userId, type, message);
         log.warn("DEMO NUDGE triggered for userId={}, type={}", userId, type);
 
         return ResponseEntity.ok(ApiResponse.of(Map.of(
