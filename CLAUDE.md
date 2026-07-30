@@ -136,21 +136,27 @@ user_competency  (Worker 소유) — AI 보정 + evidence
 활동형 퀘스트(`skillCode == null`)는 대상이 아니다. `guidance = null`.
 `guidance` 가 없는 옛 프로필 버전도 null 로 두고 예외를 던지지 않는다(D-8).
 
-## D-3. ALREADY_KNOWN은 완료로 집계한다
+## D-3. ALREADY_KNOWN은 분자·분모 양쪽에서 제외한다
 
 ```
-완료율 = count(DONE + ALREADY_KNOWN) / count(전체) × 100
+완료율 = count(DONE) / count(전체 − ALREADY_KNOWN) × 100
+분모가 0이면(전부 ALREADY_KNOWN) → 100%
 ```
+
+경력자가 자가진단만으로 높은 완료율·숙련 단계를 얻는 것을 방지하기 위해,
+ALREADY_KNOWN은 진행률 집계 대상에서 빼고 "할 게 남지 않았다"면 100%로 처리한다.
+레벨 해금에서는 ALREADY_KNOWN을 완료로 간주한다(`isCompleted()`).
 
 M ≥ 0.66 → `ALREADY_KNOWN`. 로드맵에 남되 접힌 상태, STAR 기록 가능. 퇴화 방지: stage는 `max(계산된 stage, max_stage)`.
 
 ## D-4. 레이더 축은 단순 완료율이다
 
 ```
-축 % = count(그 축의 DONE + ALREADY_KNOWN) / count(그 축의 전체) × 100
+축 % = count(축의 DONE) / count(축의 전체 − 축의 ALREADY_KNOWN) × 100
+분모가 0이면(축이 전부 ALREADY_KNOWN) → 100%
 ```
 
-가중평균이 **아니다.** `AxisAggregator` 인터페이스로 분리하되 기본은 단순 완료율.
+D-3과 동일 기준. 가중평균이 **아니다.** `AxisAggregator` 인터페이스로 분리하되 기본은 단순 완료율.
 
 ## D-5. 퀘스트는 세 종류, 스킬이 없을 수 있다
 
