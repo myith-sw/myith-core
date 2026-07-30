@@ -31,12 +31,12 @@ public class SnapshotCalculator {
 
         // 완료율: DONE만 집계. 분모에서도 ALREADY_KNOWN을 뺀다.
         // 경력자가 자가진단만으로 높은 완료율을 얻는 것을 방지(ff83de0).
-        // 분모가 0이면(전부 ALREADY_KNOWN) 할 게 남지 않았으므로 100%.
+        // 분모가 0이면(전부 ALREADY_KNOWN): DONE이 1개라도 있으면 100%, 없으면 0%.
         long alreadyKnown = quests.stream().filter(q -> q.getStatus() == QuestStatus.ALREADY_KNOWN).count();
         long denominator = quests.size() - alreadyKnown;
         long completed = quests.stream().filter(q -> q.getStatus().isDone()).count();
         BigDecimal completionRate = denominator == 0
-                ? BigDecimal.valueOf(100)
+                ? (completed > 0 ? BigDecimal.valueOf(100) : BigDecimal.ZERO)
                 : BigDecimal.valueOf(completed * 100)
                         .divide(BigDecimal.valueOf(denominator), 2, RoundingMode.HALF_UP);
 

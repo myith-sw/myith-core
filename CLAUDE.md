@@ -140,11 +140,13 @@ user_competency  (Worker 소유) — AI 보정 + evidence
 
 ```
 완료율 = count(DONE) / count(전체 − ALREADY_KNOWN) × 100
-분모가 0이면(전부 ALREADY_KNOWN) → 100%
+분모가 0이면(전부 ALREADY_KNOWN):
+  DONE이 1개라도 있으면 → 100%
+  DONE이 없으면 → 0%   ← 자가진단만으로 100% 달성 방지
 ```
 
 경력자가 자가진단만으로 높은 완료율·숙련 단계를 얻는 것을 방지하기 위해,
-ALREADY_KNOWN은 진행률 집계 대상에서 빼고 "할 게 남지 않았다"면 100%로 처리한다.
+ALREADY_KNOWN은 진행률 집계 대상에서 빼고, DONE 실적이 없으면 0%로 처리한다.
 레벨 해금에서는 ALREADY_KNOWN을 완료로 간주한다(`isCompleted()`).
 
 M ≥ 0.66 → `ALREADY_KNOWN`. 로드맵에 남되 접힌 상태, STAR 기록 가능. 퇴화 방지: stage는 `max(계산된 stage, max_stage)`.
@@ -153,7 +155,9 @@ M ≥ 0.66 → `ALREADY_KNOWN`. 로드맵에 남되 접힌 상태, STAR 기록 �
 
 ```
 축 % = count(축의 DONE) / count(축의 전체 − 축의 ALREADY_KNOWN) × 100
-분모가 0이면(축이 전부 ALREADY_KNOWN) → 100%
+분모가 0이면(축이 전부 ALREADY_KNOWN):
+  DONE이 1개라도 있으면 → 100%
+  DONE이 없으면 → 0%
 ```
 
 D-3과 동일 기준. 가중평균이 **아니다.** `AxisAggregator` 인터페이스로 분리하되 기본은 단순 완료율.
