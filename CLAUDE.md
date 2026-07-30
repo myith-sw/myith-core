@@ -230,12 +230,11 @@ DB만 본다.
 ## D-14. 레벨 해금 규칙
 
 ```
-Lv1 퀘스트     : 항상 OPEN (레벨 해금 + 선행관계 모두 면제)
-Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)해야 해금 후보
+Lv1 퀘스트     : 항상 OPEN
+Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)해야 OPEN
 
-최종 상태 = (레벨 해금 후보) AND (선행관계 충족) → OPEN
-           Lv1은 예외: 선행관계가 있어도 OPEN
-            그 외 → LOCKED
+최종 상태 = 레벨 해금 → OPEN, 아니면 → LOCKED
+선행관계는 레벨 배치에 이미 반영되어 있으므로 해금 판정에서 제외한다.
 ```
 
 - ALREADY_KNOWN이 완료로 집계되므로 경력자는 초기 조립 시점에 여러 레벨이 자동 해금된다.
@@ -246,7 +245,7 @@ Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)�
 
 ## D-15. QuestStatus 상태 전이
 
-LOCKED  --(선행 충족 + 레벨 해금)--> OPEN
+LOCKED  --(레벨 해금)--> OPEN
 OPEN    --(STAR 저장, 1칸 이상 내용 있음)--> PENDING
 PENDING --(STAR 전부 공백)--> OPEN
 PENDING --(완료 true)--> DONE

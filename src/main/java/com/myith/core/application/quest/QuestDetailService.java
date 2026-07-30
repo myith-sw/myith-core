@@ -240,7 +240,8 @@ public class QuestDetailService {
      *
      * @return 새로 해금된 퀘스트 ID 목록
      */
-    List<Long> recomputeQuestStatuses(Roadmap roadmap) {
+    @Transactional
+    public List<Long> recomputeQuestStatuses(Roadmap roadmap) {
         List<Quest> allQuests = questRepository.findByRoadmapId(roadmap.getId());
 
         JobProfileData profile = jobProfileReadRepository
