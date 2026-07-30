@@ -715,3 +715,4 @@ QuestUnlockPolicy 는 이전 레벨을 100% 완료해야 다음 레벨을 연다
 "도메인 붙여줘" / "상태 확인" / "userId 알려줘" 요청 시
 `/Users/sungyoon/Desktop/sw-contest/myith-infra/myith-infra/OPS.md` 의
 "11. 시연 운영" 섹션을 읽고 지시를 따른다.
+"배포해줘" / "시연해줘" 요청 시 → myith-infra 의 OPS.md §13 을 읽고 그대로 수행한다.
