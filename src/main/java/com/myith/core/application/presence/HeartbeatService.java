@@ -92,9 +92,11 @@ public class HeartbeatService {
 
         // 데모 넛지 확인 (기존 판정보다 먼저, 쿨다운 우회)
         if (demoNudgeRegistry != null) {
-            String demoType = demoNudgeRegistry.consume(userId);
-            if (demoType != null) {
-                return new HeartbeatResult(true, demoType, messageOf(demoType), charState);
+            DemoNudgeRegistry.Pending demoPending = demoNudgeRegistry.consume(userId);
+            if (demoPending != null) {
+                String msg = (demoPending.message() != null && !demoPending.message().isBlank())
+                        ? demoPending.message() : messageOf(demoPending.type());
+                return new HeartbeatResult(true, demoPending.type(), msg, charState);
             }
         }
 

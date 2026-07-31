@@ -13,7 +13,6 @@ import com.myith.core.domain.roadmap.RoadmapAssembler.Prerequisite;
 import com.myith.core.domain.star.StarRecord;
 import com.myith.core.application.roadmap.RoadmapQueryService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +35,7 @@ public class QuestDetailService {
     private final DashboardSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
     private final int maxRetries;
+    private final int certMaxDisplayCount;
 
     public QuestDetailService(QuestRepository questRepository,
                               RoadmapRepository roadmapRepository,
@@ -47,7 +47,8 @@ public class QuestDetailService {
                               UserQuestGuidanceReadRepository guidanceReadRepository,
                               DashboardSnapshotRepository snapshotRepository,
                               ObjectMapper objectMapper,
-                              @Value("${policy.optimistic-lock.max-retries}") int maxRetries) {
+                              @Value("${policy.optimistic-lock.max-retries}") int maxRetries,
+                              @Value("${policy.certification.max-display-count}") int certMaxDisplayCount) {
         this.questRepository = questRepository;
         this.roadmapRepository = roadmapRepository;
         this.starRecordRepository = starRecordRepository;
@@ -59,6 +60,7 @@ public class QuestDetailService {
         this.snapshotRepository = snapshotRepository;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
+        this.certMaxDisplayCount = certMaxDisplayCount;
     }
 
     @Transactional(readOnly = true)
@@ -73,13 +75,23 @@ public class QuestDetailService {
         // NCS 단위 + 자격 조회 (DB에서만, NCS API 호출 금지 C-1)
         NcsUnitDto ncsUnit = null;
         List<CertDto> certifications = List.of();
+        int moreCertificationCount = 0;
         if (quest.getNcsUnitCode() != null) {
             ncsUnit = ncsReadRepository.findUnitByCode(quest.getNcsUnitCode())
                     .map(e -> new NcsUnitDto(e.code(), e.name(), e.description()))
                     .orElse(null);
-            certifications = ncsReadRepository.findCertificationsByUnitCode(quest.getNcsUnitCode()).stream()
+            List<CertDto> allCerts = ncsReadRepository.findCertificationsByUnitCode(quest.getNcsUnitCode()).stream()
+                    .sorted(Comparator.comparing((NcsReadRepository.CertificationData c) ->
+                                    !"필수".equals(c.unitType()))
+                            .thenComparing(NcsReadRepository.CertificationData::certName))
                     .map(e -> new CertDto(e.certName()))
                     .toList();
+            if (allCerts.size() > certMaxDisplayCount) {
+                certifications = allCerts.subList(0, certMaxDisplayCount);
+                moreCertificationCount = allCerts.size() - certMaxDisplayCount;
+            } else {
+                certifications = allCerts;
+            }
         }
 
         // STAR 조회
@@ -104,7 +116,8 @@ public class QuestDetailService {
                 quest.getAxisCode(), axisName, quest.getLevel(),
                 quest.getStatus().toApiName(), quest.getSource().name(),
                 quest.getOrderInLevel(), quest.getVersion(),
-                ncsUnit, certifications, quest.getCompletionCriteria(), guidance, star, updatedAt);
+                ncsUnit, certifications, moreCertificationCount,
+                quest.getCompletionCriteria(), guidance, star, updatedAt);
     }
 
     /**
@@ -157,11 +170,7 @@ public class QuestDetailService {
                 quest.getVersion(), quest.getCreatedAt(), Instant.now()
         );
 
-        try {
-            questRepository.save(updated);
-        } catch (ObjectOptimisticLockingFailureException e) {
-            throw new QuestManageService.OptimisticLockConflictException("Concurrent quest update detected");
-        }
+        questRepository.save(updated);
 
         // 사이드이펙트 1: QuestUnlockPolicy로 전체 퀘스트 상태 재계산
         List<Long> unlockedIds = recomputeQuestStatuses(roadmap);
@@ -231,7 +240,8 @@ public class QuestDetailService {
      *
      * @return 새로 해금된 퀘스트 ID 목록
      */
-    List<Long> recomputeQuestStatuses(Roadmap roadmap) {
+    @Transactional
+    public List<Long> recomputeQuestStatuses(Roadmap roadmap) {
         List<Quest> allQuests = questRepository.findByRoadmapId(roadmap.getId());
 
         JobProfileData profile = jobProfileReadRepository
@@ -341,8 +351,11 @@ public class QuestDetailService {
 
         StarRecord existing = starRecordRepository.findByQuestId(questId).orElse(null);
         if (existing != null) {
-            existing.update(situation, task, action, result);
-            starRecordRepository.save(existing);
+            // 조치 d: 중복 저장 스킵 — 4필드가 동일하면 star_record 쓰기를 건너뛴다
+            if (!starFieldsMatch(existing, situation, task, action, result)) {
+                existing.update(situation, task, action, result);
+                starRecordRepository.save(existing);
+            }
         } else {
             StarRecord record = StarRecord.create(questId, userId, situation, task, action, result);
             starRecordRepository.save(record);
@@ -418,11 +431,77 @@ public class QuestDetailService {
         return eventId;
     }
 
+    /**
+     * 수렴 확인용: 현재 DB 상태로 ToggleResult를 조립한다.
+     * 재시도 후에도 충돌이 지속되지만 목표 상태가 이미 달성된 경우 사용.
+     */
+    @Transactional(readOnly = true)
+    public ToggleResult buildToggleResultFromCurrentState(Long userId, Long questId) {
+        Quest quest = questRepository.findById(questId)
+                .orElseThrow(() -> new QuestManageService.QuestNotFoundException(questId));
+
+        Roadmap roadmap = roadmapRepository.findById(quest.getRoadmapId())
+                .orElseThrow(() -> new RoadmapQueryService.RoadmapNotFoundException(quest.getRoadmapId()));
+
+        DashboardSnapshotRepository.SnapshotData snapshot =
+                snapshotRepository.findByRoadmapId(quest.getRoadmapId()).orElse(null);
+
+        List<Quest> allQuests = questRepository.findByRoadmapId(quest.getRoadmapId());
+        Quest nextQuest = allQuests.stream()
+                .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.PENDING)
+                .min(Comparator.comparingInt(Quest::getLevel).thenComparingInt(Quest::getOrderInLevel))
+                .orElse(null);
+
+        int currentLevel = allQuests.stream()
+                .filter(q -> q.getStatus() == QuestStatus.OPEN || q.getStatus() == QuestStatus.DONE
+                        || q.getStatus() == QuestStatus.PENDING)
+                .mapToInt(Quest::getLevel)
+                .max().orElse(1);
+
+        Map<String, String> axisNameMap = buildAxisNameMap(roadmap.getJobCode(), roadmap.getProfileVersion());
+        List<ToggleResult.RadarEntry> radar = parseRadar(snapshot, axisNameMap);
+
+        return new ToggleResult(
+                quest.getId(), quest.getStatus(), quest.getVersion(),
+                quest.getCompletedAt(),
+                List.of(),
+                snapshot != null ? snapshot.completionRate() : BigDecimal.ZERO,
+                snapshot != null ? snapshot.stage() : null,
+                currentLevel,
+                nextQuest != null ? new ToggleResult.NextQuest(nextQuest.getId(), nextQuest.getTitle()) : null,
+                radar
+        );
+    }
+
+    /**
+     * 조치 d: STAR 4필드가 기존 레코드와 동일한지 비교 (trim, null≡blank 동일 취급).
+     */
+    private boolean starFieldsMatch(StarRecord record, String situation, String task,
+                                     String action, String result) {
+        return normalizedEquals(record.getSituation(), situation)
+                && normalizedEquals(record.getTask(), task)
+                && normalizedEquals(record.getAction(), action)
+                && normalizedEquals(record.getResult(), result);
+    }
+
+    private boolean normalizedEquals(String a, String b) {
+        String na = normalizeField(a);
+        String nb = normalizeField(b);
+        return java.util.Objects.equals(na, nb);
+    }
+
+    private String normalizeField(String s) {
+        if (s == null) return null;
+        String trimmed = s.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     // ===== DTOs =====
     public record QuestDetailDto(Long questId, Long roadmapId, String title,
                                  String axisCode, String axisName, int level,
                                  String status, String source, int order, long version,
                                  NcsUnitDto ncsUnit, List<CertDto> certifications,
+                                 int moreCertificationCount,
                                  String completionCriteria, String guidance,
                                  StarDto star, String updatedAt) {}
     public record NcsUnitDto(String code, String name, String description) {}

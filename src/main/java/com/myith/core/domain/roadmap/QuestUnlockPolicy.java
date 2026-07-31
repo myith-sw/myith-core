@@ -51,19 +51,8 @@ public class QuestUnlockPolicy {
             }
         }
 
-        // 3. 선행관계 맵 구성: skillCode → 선행 스킬 목록
-        Map<String, Set<String>> prereqMap = new HashMap<>();
-        for (RoadmapAssembler.Prerequisite p : prerequisites) {
-            prereqMap.computeIfAbsent(p.to(), k -> new HashSet<>()).add(p.from());
-        }
-
-        // 완료된 스킬 집합
-        Set<String> completedSkills = quests.stream()
-                .filter(q -> q.getSkillCode() != null && q.getStatus().isCompleted())
-                .map(Quest::getSkillCode)
-                .collect(Collectors.toSet());
-
-        // 4. 각 퀘스트의 목표 상태 계산
+        // 3. 각 퀘스트의 목표 상태 계산 — 레벨 해금만으로 OPEN.
+        // 선행관계는 레벨 배치에 이미 반영되어 있으므로 해금 판정에서 제외한다.
         List<StatusChange> changes = new ArrayList<>();
         for (Quest quest : quests) {
             QuestStatus current = quest.getStatus();
@@ -78,17 +67,7 @@ public class QuestUnlockPolicy {
             // 레벨 해금 여부
             boolean levelUnlocked = unlockedLevels.contains(quest.getLevel());
 
-            // 선행관계 충족 여부
-            boolean prereqsMet;
-            if (quest.getSkillCode() == null) {
-                // 활동형/사용자정의는 선행관계 제약을 받지 않음
-                prereqsMet = true;
-            } else {
-                Set<String> required = prereqMap.get(quest.getSkillCode());
-                prereqsMet = (required == null || completedSkills.containsAll(required));
-            }
-
-            QuestStatus target = (levelUnlocked && prereqsMet) ? QuestStatus.OPEN : QuestStatus.LOCKED;
+            QuestStatus target = levelUnlocked ? QuestStatus.OPEN : QuestStatus.LOCKED;
 
             // 이미 열린 퀘스트를 다시 잠그지 않는다 (단조성).
             // 퀘스트 추가·삭제·완료 취소로 레벨 total이 변해도

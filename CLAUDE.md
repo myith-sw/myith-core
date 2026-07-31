@@ -136,21 +136,31 @@ user_competency  (Worker 소유) — AI 보정 + evidence
 활동형 퀘스트(`skillCode == null`)는 대상이 아니다. `guidance = null`.
 `guidance` 가 없는 옛 프로필 버전도 null 로 두고 예외를 던지지 않는다(D-8).
 
-## D-3. ALREADY_KNOWN은 완료로 집계한다
+## D-3. ALREADY_KNOWN은 분자·분모 양쪽에서 제외한다
 
 ```
-완료율 = count(DONE + ALREADY_KNOWN) / count(전체) × 100
+완료율 = count(DONE) / count(전체 − ALREADY_KNOWN) × 100
+분모가 0이면(전부 ALREADY_KNOWN):
+  DONE이 1개라도 있으면 → 100%
+  DONE이 없으면 → 0%   ← 자가진단만으로 100% 달성 방지
 ```
+
+경력자가 자가진단만으로 높은 완료율·숙련 단계를 얻는 것을 방지하기 위해,
+ALREADY_KNOWN은 진행률 집계 대상에서 빼고, DONE 실적이 없으면 0%로 처리한다.
+레벨 해금에서는 ALREADY_KNOWN을 완료로 간주한다(`isCompleted()`).
 
 M ≥ 0.66 → `ALREADY_KNOWN`. 로드맵에 남되 접힌 상태, STAR 기록 가능. 퇴화 방지: stage는 `max(계산된 stage, max_stage)`.
 
 ## D-4. 레이더 축은 단순 완료율이다
 
 ```
-축 % = count(그 축의 DONE + ALREADY_KNOWN) / count(그 축의 전체) × 100
+축 % = count(축의 DONE) / count(축의 전체 − 축의 ALREADY_KNOWN) × 100
+분모가 0이면(축이 전부 ALREADY_KNOWN):
+  DONE이 1개라도 있으면 → 100%
+  DONE이 없으면 → 0%
 ```
 
-가중평균이 **아니다.** `AxisAggregator` 인터페이스로 분리하되 기본은 단순 완료율.
+D-3과 동일 기준. 가중평균이 **아니다.** `AxisAggregator` 인터페이스로 분리하되 기본은 단순 완료율.
 
 ## D-5. 퀘스트는 세 종류, 스킬이 없을 수 있다
 
@@ -206,18 +216,25 @@ email→'deleted_{id}@myith.local', google_id→null, nickname→'탈퇴한 사�
 
 인스턴스별 임시 큐(`core.sse.{instanceId}`, auto-delete, exclusive)로 Worker fanout exchange 구독. SSE 레지스트리에 해당 roadmapId 연결이 있으면 전달, 없으면 무시. 상태 변경 이벤트는 `processed_event`로 멱등 처리.
 
-## D-13. 정합성 스케줄러
+## D-13. 비동기 조립: 즉시 경로 + 정합성 스케줄러(안전망)
 
-매 1분: `generation_state='ANALYZING'`이고 `updated_at < now()-60초`인 로드맵을 스캔. user_competency 있으면 보정 조립, 없으면 자가진단만으로 폴백 조립, 3회 초과 시 FAILED. DB만 본다.
+정상 경로: `CompetencyExtracted` 이벤트 수신 즉시 `assembleAndSnapshot()` 호출.
+ANALYZING 상태인 로드맵만 조립하고, 이미 READY/FAILED면 스킵(중복 방지).
+
+정합성 스케줄러는 Worker가 이벤트를 발행하지 못한 경우의 안전망이다.
+매 1분: `generation_state='ANALYZING'`이고 `updated_at < now()-180초`인 로드맵을 스캔.
+user_competency 있으면 보정값 반영 조립, 없고 retry < max-retries면 대기,
+max-retries(3) 도달 시 자가진단만으로 조립해 READY로 확정한다(FAILED로 만들지 않는다).
+DB만 본다.
 
 ## D-14. 레벨 해금 규칙
 
 ```
-Lv1 퀘스트     : 항상 해금 후보
-Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)해야 해금 후보
+Lv1 퀘스트     : 항상 OPEN
+Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)해야 OPEN
 
-최종 상태 = (레벨 해금 후보) AND (선행관계 충족) → OPEN
-            그 외 → LOCKED
+최종 상태 = 레벨 해금 → OPEN, 아니면 → LOCKED
+선행관계는 레벨 배치에 이미 반영되어 있으므로 해금 판정에서 제외한다.
 ```
 
 - ALREADY_KNOWN이 완료로 집계되므로 경력자는 초기 조립 시점에 여러 레벨이 자동 해금된다.
@@ -228,7 +245,7 @@ Lv N+1 퀘스트  : Lv N 의 퀘스트 **전부** 완료(DONE + ALREADY_KNOWN)�
 
 ## D-15. QuestStatus 상태 전이
 
-LOCKED  --(선행 충족 + 레벨 해금)--> OPEN
+LOCKED  --(레벨 해금)--> OPEN
 OPEN    --(STAR 저장, 1칸 이상 내용 있음)--> PENDING
 PENDING --(STAR 전부 공백)--> OPEN
 PENDING --(완료 true)--> DONE
@@ -264,8 +281,21 @@ STAR 저장이 version을 올려 동시 호출 시 409가 나던 문제 때문�
 JPA `@Version`은 그대로 살아 있고 `ObjectOptimisticLockingFailureException`도 계속 잡는다.
 없앤 것은 **애플리케이션 레벨의 명시적 version 비교**뿐이다.
 
-Swagger에서 `PATCH .../complete`의 409는 `QUEST_LOCKED`만 남는다.
 응답의 `version`은 참고용이며 "다음 요청에 쓰라"고 안내하지 않는다.
+
+## D-18. PUT /star 와 PATCH /complete 동시 호출 안전
+
+`QuestWriteFacade`가 비트랜잭션 파사드로 3단계 방어를 제공한다:
+
+1. **Striped lock** — questId 기준 64개 스트라이프. 같은 퀘스트 쓰기를 프로세스 내 직렬화.
+   tryLock 5초 타임아웃, 단일 인스턴스에서만 유효(다중 인스턴스 시 분산 락 필요).
+2. **낙관적 락 재시도** — `ObjectOptimisticLockingFailureException` 발생 시 최대 3회,
+   50ms + 0~30ms 랜덤 지터. 트랜잭션 밖에서 재시도하므로 새 트랜잭션으로 최신 상태를 읽는다.
+3. **의도 수렴 확인** — 3회 실패 후 DB를 읽어 목표 상태가 이미 달성되었으면 200 반환.
+   toggleComplete: `completed=true`이고 이미 DONE/ALREADY_KNOWN → 정상.
+   saveStar: 4필드가 DB와 동일 → 정상.
+
+추가로 **중복 저장 스킵**(조치 d): saveStar에서 4필드 동일(trim, null≡blank) 시 star_record 쓰기 생략.
 
 ---
 
@@ -410,12 +440,23 @@ DELETE /api/roadmaps/{id}/quests/{qid}  -- CUSTOM만
 ```
 GET   /api/quests/{id}
 → { questId, title, axisName, level, status, guidance?,
-    ncsUnit:{ code, name, description }|null, certifications:[{ name }],
+    ncsUnit:{ code, name, description }|null,
+    certifications:[{ name }], moreCertificationCount (int),
     completionCriteria, star:{ situation, task, action, result }|null }
+    certifications: unit_type '필수' 우선 → 가나다순, 최대 policy.certification.max-display-count개(기본 5)
+    moreCertificationCount: 상한 초과분 개수 (0이면 전부 표시됨)
 
 PATCH /api/quests/{id}/complete    { completed, star? }  ← version 제거(D-17)
+      star 를 함께 보내면 내부에서 STAR 저장까지 처리한다. 생략해도 된다.
+      PUT /star 와 이 API 를 같은 동작에서 함께 호출해도 안전하다.
+      서버가 퀘스트 단위로 쓰기를 직렬화하고, 낙관적 락 충돌이 발생하면
+      최대 3회 자동 재시도하며, 재시도 후에도 목표 상태가 이미 달성되어 있으면
+      정상 응답을 반환한다. 정상적인 사용에서는 409 가 발생하지 않는다(D-18).
 PUT   /api/quests/{id}/star        { situation, task, action, result }
                                    → { status, version }
+      ⚠ deprecated · Swagger 비노출. 웹 프론트 호환 목적으로 라우팅만 유지.
+      PATCH /complete 와 동시에 호출해도 안전하다. 서버가 직렬화·재시도로 처리한다(D-18).
+      source·aiEnhancementId 는 현재 저장되지 않는 참고용 필드이다.
 POST  /api/quests/{id}/ai-enhancements   → 202 { requestId }
 GET   /api/ai-enhancements/{reqId}       → { status, enhancedStar?, feedback[], resumeDraft? }
                                            FAILED 시 enhancedStar·feedback·resumeDraft는 null.
@@ -423,6 +464,8 @@ GET   /api/ai-enhancements/{reqId}       → { status, enhancedStar?, feedback[]
 ```
 
 퀘스트 status 값: LOCKED / OPEN / DONE / ALREADY_KNOWN (PENDING은 API에 노출하지 않는다 D-16).
+409 응답: 직렬화·재시도·상태 수렴 확인을 모두 거친 뒤에도 충돌이 지속될 때만 반환된다.
+클라이언트는 그대로 재요청하면 된다.
 완료 토글 시 dashboard_snapshot 재계산. AI 보완은 Outbox 발행, 결과는 저장하지 않음.
 
 ## F-9. 대시보드 · 내보내기
@@ -667,3 +710,9 @@ QuestUnlockPolicy 는 이전 레벨을 100% 완료해야 다음 레벨을 연다
 ## 인프라 운영
 
 인프라 관리는 `myith-infra` 저장소의 `OPS.md`를 참조한다.
+
+"서버 켜줘" / "꺼줘" / "배포해줘" / "시연해줘" / "신호" / "넛지" / "쏴줘" /
+"도메인 붙여줘" / "상태 확인" / "userId 알려줘" 요청 시
+`/Users/sungyoon/Desktop/sw-contest/myith-infra/myith-infra/OPS.md` 의
+"11. 시연 운영" 섹션을 읽고 지시를 따른다.
+"배포해줘" / "시연해줘" 요청 시 → myith-infra 의 OPS.md §13 을 읽고 그대로 수행한다.

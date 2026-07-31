@@ -116,26 +116,44 @@ public class RoadmapController {
             @AuthenticationPrincipal Long userId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateRoadmapRequest request) {
+        // 레거시 필드 합성: narrative.experience / 최상위 repoUrl·fileKey → experiences 1건
+        List<ExperienceDto> experienceDtos = null;
+        if (request.experiences() != null && !request.experiences().isEmpty()) {
+            experienceDtos = request.experiences().stream()
+                    .map(e -> new ExperienceDto(e.content(), e.repoUrl(), e.fileKey()))
+                    .toList();
+        } else {
+            String legacyContent = request.narrative() != null ? request.narrative().experience() : null;
+            String legacyRepoUrl = request.repoUrl();
+            String legacyFileKey = request.fileKey();
+            boolean hasLegacy = hasText(legacyContent) || hasText(legacyRepoUrl) || hasText(legacyFileKey);
+            if (hasLegacy) {
+                experienceDtos = List.of(new ExperienceDto(legacyContent, legacyRepoUrl, legacyFileKey));
+            }
+        }
+
+        NarrativeDto narrativeDto = request.narrative() != null
+                ? new NarrativeDto(request.narrative().strength(), request.narrative().difficulty())
+                : null;
+
         CreateCommand cmd = new CreateCommand(
                 request.jobCode(), request.profileVersion(),
                 request.species(), request.nickname(),
                 request.answers().stream()
                         .map(a -> new AnswerDto(a.skillCode(), levelToMastery(a.level())))
                         .toList(),
-                request.narrative() != null
-                        ? new NarrativeDto(request.narrative().strength(), request.narrative().difficulty())
-                        : null,
-                request.experiences() != null
-                        ? request.experiences().stream()
-                        .map(e -> new ExperienceDto(e.content(), e.repoUrl(), e.fileKey()))
-                        .toList()
-                        : null
+                narrativeDto,
+                experienceDtos
         );
         CreateResult result = roadmapCreateService.create(userId, cmd);
         HttpStatus status = result.async() ? HttpStatus.ACCEPTED : HttpStatus.OK;
         String genState = result.async() ? "ANALYZING" : "READY";
         return ResponseEntity.status(status)
                 .body(ApiResponse.of(new CreateRoadmapResponse("rmp_" + result.roadmapId(), genState)));
+    }
+
+    private static boolean hasText(String s) {
+        return s != null && !s.isBlank();
     }
 
     private BigDecimal levelToMastery(String level) {
@@ -421,7 +439,11 @@ public class RoadmapController {
             @Schema(description = "자기 평가 서술(강점·어려움)입니다. 이 필드나 experiences 중 하나라도 있으면 202 비동기 분석으로 처리됩니다.")
             NarrativeRequest narrative,
             @Schema(description = "프로젝트 경험 카드 목록입니다. 있으면 202 비동기 분석으로 처리됩니다. 카드별로 서술·링크·파일을 각각 전달합니다. 최대 3개")
-            @Size(max = 3, message = "경험 카드는 최대 3개까지 등록할 수 있습니다.") List<ExperienceRequest> experiences
+            @Size(max = 3, message = "경험 카드는 최대 3개까지 등록할 수 있습니다.") List<ExperienceRequest> experiences,
+            @Schema(description = "(레거시) 프론트 구버전이 보내는 GitHub URL. experiences[].repoUrl 로 합성된다.", hidden = true)
+            String repoUrl,
+            @Schema(description = "(레거시) 프론트 구버전이 보내는 파일 키. experiences[].fileKey 로 합성된다.", hidden = true)
+            String fileKey
     ) {}
 
     @Schema(name = "AnswerRequest")
@@ -438,7 +460,9 @@ public class RoadmapController {
             @Schema(description = "자신의 강점에 대한 자유 서술입니다. null 허용입니다.", example = "Java와 Spring이 가장 익숙합니다.")
             String strength,
             @Schema(description = "어려움을 느끼는 부분에 대한 자유 서술입니다. null 허용입니다.", example = "성능 최적화는 아직 해본 적이 없습니다.")
-            String difficulty
+            String difficulty,
+            @Schema(description = "(레거시) 프론트 구버전이 보내는 경험 서술. experiences[].content 로 합성된다.", hidden = true)
+            String experience
     ) {}
 
     @Schema(name = "ExperienceRequest")

@@ -64,6 +64,7 @@ public class DashboardController {
                                   "stageLabel": "완성",
                                   "completionRate": 80,
                                   "completedQuestCount": 7,
+                                  "totalQuestCount": 10,
                                   "level": 4
                                 },
                                 "radar": [
@@ -126,11 +127,16 @@ public class DashboardController {
         String nickname = detail.character() != null ? detail.character().nickname() : null;
         String species = detail.character() != null ? detail.character().species() : null;
 
-        // 완료 퀘스트 수 계산
+        // 완료 퀘스트 수: 분자 DONE, 분모 전체−ALREADY_KNOWN (SnapshotCalculator와 동일 기준)
         long completedQuestCount = dto.skillTree().stream()
                 .flatMap(st -> st.quests().stream())
                 .filter(q -> "DONE".equals(q.status()))
                 .count();
+        long totalMinusAk = dto.skillTree().stream()
+                .flatMap(st -> st.quests().stream())
+                .filter(q -> !"ALREADY_KNOWN".equals(q.status()))
+                .count();
+        long totalQuestCount = totalMinusAk == 0 ? completedQuestCount : totalMinusAk;
 
         // 현재 레벨 계산 (OPEN 또는 DONE 상태의 퀘스트 중 최고 레벨)
         int currentLevel = dto.skillTree().stream()
@@ -143,7 +149,7 @@ public class DashboardController {
                 new DashboardCharacterResponse(
                         nickname, detail.jobName(), species,
                         stageNum, stageLabel,
-                        completionRate, (int) completedQuestCount, currentLevel
+                        completionRate, (int) completedQuestCount, totalQuestCount, currentLevel
                 ),
                 dto.radar().stream().map(r -> new QuestController.RadarEntry(
                         r.axisCode(), axisNameMap.getOrDefault(r.axisCode(), r.axisCode()),
@@ -251,8 +257,9 @@ public class DashboardController {
             @Schema(description = "캐릭터 종류입니다. 이미지 경로 /characters/{species}-{stage}.png 형태로 조합하세요.", example = "deokbaseu") String species,
             @Schema(description = "성장 단계 숫자입니다(1~4). stage와 stageLabel을 함께 사용하세요.", example = "4") int stage,
             @Schema(description = "성장 단계 라벨입니다. 시작·성장·숙련·완성 중 하나입니다.", allowableValues = {"시작", "성장", "숙련", "완성"}, example = "완성") String stageLabel,
-            @Schema(description = "완료율(%)입니다. DONE+ALREADY_KNOWN 기준입니다.", example = "80") int completionRate,
-            @Schema(description = "완료한 퀘스트 수입니다.", example = "7") int completedQuestCount,
+            @Schema(description = "완료율(%)입니다. DONE / (전체 − ALREADY_KNOWN) 기준입니다.", example = "80") int completionRate,
+            @Schema(description = "완료한 퀘스트 수(DONE)입니다.", example = "7") int completedQuestCount,
+            @Schema(description = "진행 대상 퀘스트 수(전체 − ALREADY_KNOWN)입니다.", example = "10") long totalQuestCount,
             @Schema(description = "현재 진행 중인 레벨입니다.", example = "4") int level
     ) {}
 

@@ -11,5 +11,5 @@ public interface NcsReadRepository {
 
     record NcsUnitData(String code, String name, String description) {}
 
-    record CertificationData(String certName) {}
+    record CertificationData(String certName, String unitType) {}
 }

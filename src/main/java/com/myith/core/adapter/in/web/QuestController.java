@@ -1,8 +1,10 @@
 package com.myith.core.adapter.in.web;
 
 import com.myith.core.application.quest.QuestDetailService;
+import com.myith.core.application.quest.QuestWriteFacade;
 import com.myith.core.common.ApiResponse;
 import com.myith.core.common.IdCodec;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -27,9 +29,12 @@ import java.util.UUID;
 public class QuestController {
 
     private final QuestDetailService questDetailService;
+    private final QuestWriteFacade questWriteFacade;
 
-    public QuestController(QuestDetailService questDetailService) {
+    public QuestController(QuestDetailService questDetailService,
+                           QuestWriteFacade questWriteFacade) {
         this.questDetailService = questDetailService;
+        this.questWriteFacade = questWriteFacade;
     }
 
     // ────────────────── GET /api/quests/{questId} ──────────────────
@@ -39,7 +44,7 @@ public class QuestController {
             description = """
                     화면 4-2(퀘스트 상세 + STAR)에서 호출합니다.
                     ncsUnit은 source가 CUSTOM이면 null입니다. null인 경우 'NCS 근거' 섹션 자체를 숨기세요.
-                    certifications는 연계 자격 전체를 반환합니다. 빈 배열이면 '해당 없음'을 표시하세요.
+                    certifications는 unit_type '필수' 우선·가나다순 정렬, 최대 5개(설정값)까지 반환합니다. 잘린 개수는 moreCertificationCount로 내려옵니다. 빈 배열이면 '해당 없음'을 표시하세요.
                     star가 null이면 STAR 입력칸을 빈 값으로 초기화하세요."""
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공",
@@ -64,8 +69,10 @@ public class QuestController {
                                   "description": "자료구조와 알고리즘 등 기초 기술을 활용하는 능력"
                                 },
                                 "certifications": [
-                                  { "name": "정보처리기사" }
+                                  { "name": "정보처리기사" },
+                                  { "name": "정보처리산업기사" }
                                 ],
+                                "moreCertificationCount": 3,
                                 "star": null,
                                 "starSource": null,
                                 "updatedAt": "2026-07-24T03:00:00Z"
@@ -87,6 +94,7 @@ public class QuestController {
                 dto.certifications() != null
                         ? dto.certifications().stream().map(c -> new CertResponse(c.name())).toList()
                         : List.of(),
+                dto.moreCertificationCount(),
                 dto.star() != null
                         ? new StarResponse(dto.star().situation(), dto.star().task(), dto.star().action(), dto.star().result())
                         : null,
@@ -96,15 +104,18 @@ public class QuestController {
     }
 
     // ────────────────── PUT /api/quests/{questId}/star ──────────────────
+    // @Deprecated: PATCH /complete 의 star 필드로 대체됨. 두 API 를 연달아 호출하면
+    // 낙관적 락 충돌(409)이 발생한다. 웹 프론트 호환을 위해 라우팅만 유지.
 
+    @Hidden
+    @Deprecated
     @Operation(
-            summary = "STAR 기록 저장 (임시 저장)",
+            summary = "[Deprecated] STAR 기록 저장",
             description = """
-                    화면 4-2(STAR 입력 탭)에서 textarea blur 또는 debounce 시 호출합니다.
-                    각 필드는 trim 후 최대 2000자입니다. 임시 저장이므로 빈 값도 허용합니다.
-                    최초 저장 시 퀘스트 상태는 내부적으로 PENDING이 되지만 API 응답에서는 OPEN으로 반환됩니다.
-                    AI 제안을 적용해 저장하는 경우 source를 "ai-assisted"로, aiEnhancementId를 해당 요청 ID로 채우세요.
-                    완료(DONE)된 퀘스트에도 STAR를 수정할 수 있습니다."""
+                    ⚠️ Deprecated — PATCH /complete 의 star 필드로 대체되었습니다.
+                    웹 프론트 호환을 위해 라우팅만 유지합니다.
+                    PATCH /complete 와 동시에 호출해도 안전합니다. 서버가 직렬화·재시도로 처리합니다.
+                    source·aiEnhancementId 는 현재 저장되지 않는 참고용 필드입니다."""
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공",
@@ -125,13 +136,15 @@ public class QuestController {
                                         "updatedAt": "2026-07-24T03:10:00Z"
                                       }
                                     }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED — 잠긴 퀘스트에 쓰기 시도",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = """
+                    직렬화·재시도·상태 수렴 확인을 모두 거친 뒤에도 충돌이 지속될 때만 반환됩니다.
+                    클라이언트는 그대로 재요청하면 됩니다.""",
                     content = @Content(mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                     {
                                       "error": {
-                                        "code": "QUEST_LOCKED",
-                                        "message": "선행 퀘스트를 먼저 완료해주세요.",
+                                        "code": "VERSION_CONFLICT",
+                                        "message": "다른 요청과 충돌했습니다. 새로고침 후 다시 시도해주세요.",
                                         "requestId": "req_01J3ABC"
                                       }
                                     }""")))
@@ -141,7 +154,7 @@ public class QuestController {
             @AuthenticationPrincipal Long userId,
             @PathVariable String questId,
             @Valid @RequestBody SaveStarRequest request) {
-        QuestDetailService.SaveStarResult starResult = questDetailService.saveStar(
+        QuestDetailService.SaveStarResult starResult = questWriteFacade.saveStar(
                 userId, IdCodec.decode(questId),
                 request.star().situation(), request.star().task(),
                 request.star().action(), request.star().result());
@@ -161,8 +174,11 @@ public class QuestController {
             summary = "퀘스트 완료 토글",
             description = """
                     퀘스트 완료 상태를 토글합니다.
-                    ★ star 를 함께 보내면 STAR 저장과 완료가 한 트랜잭션에서 처리됩니다.
-                    star 를 생략하면 완료 토글만 수행합니다.
+                    ★ star 를 함께 보내면 내부에서 STAR 저장까지 처리합니다. 생략해도 됩니다.
+                    PUT /star 와 이 API 를 같은 동작에서 함께 호출해도 안전합니다.
+                    서버가 퀘스트 단위로 쓰기를 직렬화하고, 낙관적 락 충돌이 발생하면
+                    최대 3회 자동 재시도하며, 재시도 후에도 목표 상태가 이미 달성되어 있으면
+                    정상 응답을 반환합니다. 정상적인 사용에서는 409 가 발생하지 않습니다.
                     응답 내 radar 배열을 활용해 레이더 차트를 재조회 없이 즉시 갱신하세요.
                     unlockedQuestIds 목록에 있는 퀘스트에 잠금 해제 애니메이션을 적용하세요.
                     completed: false를 보내면 완료 취소(DONE → OPEN)가 처리됩니다.""",
@@ -203,7 +219,10 @@ public class QuestController {
                                         ]
                                       }
                                     }"""))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "QUEST_LOCKED — 잠긴 퀘스트에 완료 시도",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = """
+                    QUEST_LOCKED — 잠긴 퀘스트에 완료 시도.
+                    VERSION_CONFLICT — 직렬화·재시도·상태 수렴 확인을 모두 거친 뒤에도 충돌이 지속될 때만 반환됩니다.
+                    클라이언트는 그대로 재요청하면 됩니다.""",
                     content = @Content(mediaType = "application/json",
                             examples = @ExampleObject(value = """
                                     {
@@ -225,7 +244,7 @@ public class QuestController {
                         request.star().action(), request.star().result())
                 : null;
         QuestDetailService.ToggleResult result =
-                questDetailService.toggleComplete(userId, IdCodec.decode(questId), request.completed(), starDto);
+                questWriteFacade.toggleComplete(userId, IdCodec.decode(questId), request.completed(), starDto);
 
         CompletedQuestInfo questInfo = new CompletedQuestInfo(
                 IdCodec.encode(result.questId(), "qst_"),
@@ -368,7 +387,8 @@ public class QuestController {
                     nullable = true,
                     example = "Git 형상관리이(가) 처음이라면 기본 개념부터 차근히 익혀보세요.") String guidance,
             @Schema(description = "화면 4-2 'NCS 능력단위 근거' 박스에 표시합니다. source가 CUSTOM이면 null이므로 섹션 자체를 숨기세요", nullable = true) NcsUnitResponse ncsUnit,
-            @Schema(description = "화면 4-2 '추천 자격' 목록입니다. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
+            @Schema(description = "화면 4-2 '추천 자격' 목록입니다. unit_type '필수' 우선, 가나다순 정렬. 빈 배열이면 '해당 없음'을 표시하세요") List<CertResponse> certifications,
+            @Schema(description = "상한(기본 5개)을 초과해 잘린 자격 수. 0이면 전부 표시된 것. '외 N개'로 표기하세요", example = "3") int moreCertificationCount,
             @Schema(description = "화면 4-2 STAR 입력칸 4개의 초기값입니다. null이면 빈 값으로 초기화하세요", nullable = true) StarResponse star,
             @Schema(description = "STAR 출처. manual 또는 ai-assisted", nullable = true) String starSource,
             @Schema(description = "최근 수정일", example = "2026-07-24T03:00:00Z") String updatedAt

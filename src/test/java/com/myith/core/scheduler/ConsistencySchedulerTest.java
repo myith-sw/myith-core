@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myith.core.adapter.in.sse.SseRegistry;
 import com.myith.core.application.port.DiagnosisRepository;
 import com.myith.core.application.port.JobProfileReadRepository;
+import com.myith.core.application.port.UserCompetencyReadRepository;
 import com.myith.core.domain.diagnosis.UserDiagnosis;
 import com.myith.core.application.port.JobProfileReadRepository.JobProfileData;
 import com.myith.core.application.port.RoadmapRepository;
 import com.myith.core.application.roadmap.RoadmapCreateService;
 import com.myith.core.domain.roadmap.GenerationState;
+import com.myith.core.domain.roadmap.MasteryMerger.CompetencyEntry;
 import com.myith.core.domain.roadmap.Roadmap;
 import com.myith.core.domain.roadmap.RoadmapStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -28,8 +30,9 @@ class ConsistencySchedulerTest {
     @Test
     @DisplayName("done 이벤트의 roadmapId는 rmp_ 접두사가 붙어야 한다")
     void doneEvent_roadmapIdHasPrefix() {
+        // retryCount를 maxRetries-1(2)로 설정 → 다음 incrementRetry로 max 도달 → 조립 확정
         Roadmap stuck = Roadmap.restore(42L, 1L, "backend", 1,
-                RoadmapStatus.ACTIVE, GenerationState.ANALYZING, 0,
+                RoadmapStatus.ACTIVE, GenerationState.ANALYZING, 2,
                 Instant.now(), Instant.now().minusSeconds(300), null, null);
 
         StubRoadmapRepository roadmapRepo = new StubRoadmapRepository(stuck);
@@ -55,6 +58,7 @@ class ConsistencySchedulerTest {
         ConsistencyScheduler scheduler = new ConsistencyScheduler(
                 roadmapRepo, profileRepo,
                 new StubDiagnosisRepository(),
+                new StubUserCompetencyReadRepository(),
                 createService,
                 sseRegistry, 3, 60);
 
@@ -102,6 +106,10 @@ class ConsistencySchedulerTest {
         @Override public List<UserDiagnosis> saveAll(List<UserDiagnosis> diagnoses) { return diagnoses; }
         @Override public List<UserDiagnosis> findByRoadmapId(Long roadmapId) { return List.of(); }
         @Override public void deleteByRoadmapIds(List<Long> roadmapIds) {}
+    }
+
+    private static class StubUserCompetencyReadRepository implements UserCompetencyReadRepository {
+        @Override public Map<String, CompetencyEntry> findByRoadmapId(Long roadmapId) { return Map.of(); }
     }
 
     private static class RecordingSseRegistry extends SseRegistry {

@@ -134,9 +134,9 @@ public class RoadmapAssembler {
                     || completedPerLevel.getOrDefault(q.getLevel() - 1, 0L)
                        >= totalPerLevel.getOrDefault(q.getLevel() - 1, 0L);
 
-            // 선행 충족 확인
+            // 선행 충족 확인 (최소 레벨은 선행관계를 무시한다 — Lv1은 항상 열림)
             boolean prereqSatisfied = true;
-            if (q.getSkillCode() != null) {
+            if (q.getLevel() > minLevel && q.getSkillCode() != null) {
                 Set<String> required = prereqMap.getOrDefault(q.getSkillCode(), Set.of());
                 prereqSatisfied = completedSkills.containsAll(required);
             }

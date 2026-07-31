@@ -20,4 +20,8 @@ public interface CharacterJpaRepository extends JpaRepository<CharacterJpaEntity
     @Modifying
     @Query("UPDATE CharacterJpaEntity c SET c.deletedAt = CURRENT_TIMESTAMP WHERE c.userId = :userId AND c.deletedAt IS NULL")
     void softDeleteByUserId(@Param("userId") Long userId);
+
+    @Modifying
+    @Query("UPDATE CharacterJpaEntity c SET c.deletedAt = CURRENT_TIMESTAMP WHERE c.id = :id AND c.deletedAt IS NULL")
+    void softDeleteById(@Param("id") Long id);
 }
